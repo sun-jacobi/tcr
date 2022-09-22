@@ -1,12 +1,6 @@
-use std::env::{self, args};
+mod rcc;
+mod lexer;
 
-fn main() {
-    if env::args().len() != 2 {
-        eprintln!("Wrong argument number");
-    }
-    println!(".intel_syntax noprefix");
-    println!(".globl _main");
-    println!("_main:");
-    println!("  mov rax, {}", args().nth(1).unwrap());
-    println!("  ret");
+fn main(){
+    rcc::Rcc::default().run();
 }
