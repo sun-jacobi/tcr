@@ -1,6 +1,7 @@
-mod rcc;
 mod lexer;
+mod parser;
+mod rcc;
 
-fn main(){
+fn main() {
     rcc::Rcc::default().run();
 }

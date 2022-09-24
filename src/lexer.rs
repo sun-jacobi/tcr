@@ -1,10 +1,8 @@
-
 #[derive(Default)]
 pub struct Lexer {
     cursor: usize,
-    characters: Vec<char>
+    characters: Vec<char>,
 }
-
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
@@ -12,45 +10,40 @@ pub enum Token {
     NUM(i64),
 }
 
-
 impl Iterator for Lexer {
-    type Item = Token;
+    type Item = Box<Token>;
     fn next(&mut self) -> Option<Self::Item> {
         let mut num_literal = String::default();
-
         loop {
             match self.curr_char() {
                 None => {
-                    if !num_literal.is_empty(){
-                        return Some(Token::NUM(num_literal.parse::<i64>().unwrap()));
-                    } 
+                    if !num_literal.is_empty() {
+                        return Some(Box::new(Token::NUM(num_literal.parse::<i64>().unwrap())));
+                    }
                     return None;
                 }
-                Some(c) => match c {
+                Some(&c) => match c {
                     ' ' => {
                         if !num_literal.is_empty() {
-                            return Some(Token::NUM(num_literal.parse::<i64>().unwrap()));
-                        } 
-                        self.cursor += 1;
-                        continue;
-                    },
-                    n @ ('+' | '-') => {
-                        if !num_literal.is_empty() {
-                            return Some(Token::NUM(num_literal.parse::<i64>().unwrap()));
+                            return Some(Box::new(Token::NUM(num_literal.parse::<i64>().unwrap())));
                         }
                         self.cursor += 1;
-                        return Some(Token::RESERVED(n));
-                    
-                    }, 
-                    _ => num_literal.push(c),    
-                }  
-            
+                        continue;
+                    }
+                    n @ ('+' | '-' | '*' | '/' | '(' | ')') => {
+                        if !num_literal.is_empty() {
+                            return Some(Box::new(Token::NUM(num_literal.parse::<i64>().unwrap())));
+                        }
+                        self.cursor += 1;
+                        return Some(Box::new(Token::RESERVED(n)));
+                    }
+                    _ => num_literal.push(c),
+                },
             }
             self.cursor += 1;
         }
     }
 }
-
 
 impl Lexer {
     pub fn new(src: String) -> Self {
@@ -60,25 +53,31 @@ impl Lexer {
         }
     }
 
-    fn char_at(&self, index: usize) -> Option<char> {
-        if self.cursor >= self.characters.len() {
-            None
-        } else {
-            Some(self.characters[index])
-        }    
+    fn curr_char(&self) -> Option<&char> {
+        self.characters.get(self.cursor)
     }
 
-    fn curr_char(&self) -> Option<char> {
-        self.char_at(self.cursor)
-    }
-
-    pub fn expect_num(&mut self) -> Result<i64, &str> {
+    pub fn expect_num(&mut self) -> Result<i64, &'static str> {
         match self.next() {
-            Some(Token::NUM(num)) => Ok(num),
-            _ => Err("Error parsing the number"),
+            Some(token) => match *token {
+                Token::NUM(num) => Ok(num),
+                _ => Err("Not Number"),
+            },
+            None => Err("No new token"),
         }
     }
 
+    pub fn expect(&mut self, expected: Token) -> Result<Box<Token>, &'static str> {
+        match self.next() {
+            Some(actual) => {
+                if *actual == expected {
+                    Ok(actual)
+                } else {
+                    Err("No such Token")
+                }
+            }
+            None => Err("No new token"),
+        }
+    }
+    
 }
-
-

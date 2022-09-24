@@ -1,7 +1,6 @@
 use std::env::args;
 
-use crate::lexer::{Lexer, Token}; 
-
+use crate::lexer::{Lexer, Token};
 
 #[derive(Default)]
 pub struct Rcc {
@@ -9,6 +8,7 @@ pub struct Rcc {
 }
 impl Rcc {
     pub fn run(&mut self) {
+        /*
         println!(".intel_syntax noprefix");
         println!(".globl _main");
         println!("_main:");
@@ -19,15 +19,13 @@ impl Rcc {
             match lexer.next() {
                 None => break,
                 Some(t) => match t {
-                    Token::RESERVED('+') => println!("  add rax, {}", 
-                                        lexer.expect_num().unwrap()),
-                    Token::RESERVED('-') => println!("  sub rax, {}", 
-                                        lexer.expect_num().unwrap()),
+                    Token::RESERVED('+') => println!("  add rax, {}", lexer.expect_num().unwrap()),
+                    Token::RESERVED('-') => println!("  sub rax, {}", lexer.expect_num().unwrap()),
                     _ => panic!("Error"),
-                }
-                
+                },
             }
         }
         println!("  ret");
+        */
     }
 }
