@@ -2,6 +2,7 @@ mod lexer;
 mod parser;
 mod rcc;
 
-fn main() {
-    rcc::Rcc::default().run();
+fn main() -> Result<(), &'static str> {
+    rcc::Rcc::run()?;
+    Ok(())
 }

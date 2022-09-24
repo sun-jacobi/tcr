@@ -99,16 +99,14 @@ mod parser_test {
         assert_eq!(root.rhs.unwrap().kind, NodeKind::NUM(31));
     }
 
-
-
     #[test]
     fn addmul_test() {
         let code = String::from("42 + 31 * 1");
         let mut parser = Parser::load(code);
         // root for an ast
         let root = parser.run().unwrap();
-        let lhs  = root.lhs.unwrap();
-        let rhs  = root.rhs.unwrap();
+        let lhs = root.lhs.unwrap();
+        let rhs = root.rhs.unwrap();
         assert_eq!(root.kind, NodeKind::ADD);
         assert_eq!(rhs.kind, NodeKind::MUL);
         assert_eq!(lhs.kind, NodeKind::NUM(42));
@@ -116,15 +114,14 @@ mod parser_test {
         assert_eq!(rhs.rhs.unwrap().kind, NodeKind::NUM(1));
     }
 
-
     #[test]
     fn bracket_test() {
         let code = String::from("42 * (31 + 1)");
         let mut parser = Parser::load(code);
         // root for an ast
         let root = parser.run().unwrap();
-        let lhs  = root.lhs.unwrap();
-        let rhs  = root.rhs.unwrap();
+        let lhs = root.lhs.unwrap();
+        let rhs = root.rhs.unwrap();
         assert_eq!(root.kind, NodeKind::MUL);
         assert_eq!(rhs.kind, NodeKind::ADD);
         assert_eq!(lhs.kind, NodeKind::NUM(42));

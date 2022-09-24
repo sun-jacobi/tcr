@@ -57,6 +57,7 @@ impl Lexer {
         self.characters.get(self.cursor)
     }
 
+    #[allow(dead_code)]
     pub fn expect_num(&mut self) -> Result<i64, &'static str> {
         match self.next() {
             Some(token) => match *token {
@@ -66,7 +67,7 @@ impl Lexer {
             None => Err("No new token"),
         }
     }
-
+    #[allow(dead_code)]
     pub fn expect(&mut self, expected: Token) -> Result<Box<Token>, &'static str> {
         match self.next() {
             Some(actual) => {
@@ -79,5 +80,4 @@ impl Lexer {
             None => Err("No new token"),
         }
     }
-    
 }

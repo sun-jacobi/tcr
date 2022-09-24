@@ -70,7 +70,7 @@ impl Parser {
                     Token::RESERVED('-') => {
                         self.consume();
                         let rhs = self.parse_mul()?;
-                        node = Box::new(Node::new(NodeKind::ADD, node, rhs));
+                        node = Box::new(Node::new(NodeKind::SUB, node, rhs));
                     }
                     _ => return Ok(node),
                 },
@@ -127,20 +127,20 @@ impl Parser {
         self.lexer.next()
     }
 
-    fn consume_char(&mut self, expected : char) -> bool {
+    fn consume_char(&mut self, expected: char) -> bool {
         match &self.curr {
             None => false,
             Some(token) => match **token {
                 Token::RESERVED(actual) => {
                     if actual == expected {
-                        self.consume(); 
-                        return true
+                        self.consume();
+                        return true;
                     } else {
                         false
                     }
                 }
-                _  => false,
-            }
+                _ => false,
+            },
         }
     }
 }
