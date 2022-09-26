@@ -14,6 +14,12 @@ pub enum NodeKind {
     SUB,
     MUL,
     DIV,
+    Eq,
+    NotEq,
+    Geq,
+    Gt,
+    Leq,
+    Lt,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -67,6 +73,65 @@ impl Parser {
     }
 
     fn parse_expr(&mut self) -> Result<Box<Node>, &'static str> {
+        let node = self.parse_equality()?;
+        Ok(node)
+    }
+
+    fn parse_equality(&mut self) -> Result<Box<Node>, &'static str> {
+        let mut node = self.parse_relation()?;
+        loop {
+            match &self.curr {
+                None => return Ok(node),
+                Some(token) => match token.kind {
+                    TokenKind::DoubleEq => {
+                        self.consume();
+                        let rhs = self.parse_relation()?;
+                        node = Box::new(Node::new(NodeKind::Eq, node, rhs));
+                    }
+                    TokenKind::NotEq => {
+                        self.consume();
+                        let rhs = self.parse_relation()?;
+                        node = Box::new(Node::new(NodeKind::NotEq, node, rhs));
+                    }
+                    _ => return Ok(node),
+                },
+            }
+        }
+    }
+
+    fn parse_relation(&mut self) -> Result<Box<Node>, &'static str> {
+        let mut node = self.parse_add()?;
+        loop {
+            match &self.curr {
+                None => return Ok(node),
+                Some(token) => match token.kind {
+                    TokenKind::Geq => {
+                        self.consume();
+                        let rhs = self.parse_add()?;
+                        node = Box::new(Node::new(NodeKind::Geq, node, rhs));
+                    }
+                    TokenKind::Gt => {
+                        self.consume();
+                        let rhs = self.parse_add()?;
+                        node = Box::new(Node::new(NodeKind::Gt, node, rhs));
+                    }
+                    TokenKind::Leq => {
+                        self.consume();
+                        let rhs = self.parse_add()?;
+                        node = Box::new(Node::new(NodeKind::Leq, node, rhs));
+                    }
+                    TokenKind::Lt => {
+                        self.consume();
+                        let rhs = self.parse_add()?;
+                        node = Box::new(Node::new(NodeKind::Lt, node, rhs));
+                    }
+                    _ => return Ok(node),
+                },
+            }
+        }
+    }
+
+    fn parse_add(&mut self) -> Result<Box<Node>, &'static str> {
         let mut node = self.parse_mul()?;
         loop {
             match &self.curr {

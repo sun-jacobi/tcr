@@ -3,8 +3,8 @@ pub mod parser;
 
 #[cfg(test)]
 mod lexer_test {
-    use crate::lexer::TokenKind;
     use super::lexer::Lexer;
+    use crate::lexer::TokenKind;
     #[test]
     fn add_test() {
         let code = String::from("42 + 31");
@@ -77,7 +77,6 @@ mod lexer_test {
         assert_eq!(lexer.next().unwrap().kind, TokenKind::Lit("28".to_string()));
     }
 }
-
 
 #[cfg(test)]
 mod parser_test {
@@ -159,9 +158,34 @@ mod parser_test {
         assert_eq!(lhs.rhs.unwrap().kind, NodeKind::NUM(42));
         assert_eq!(rhs.rhs.unwrap().kind, NodeKind::NUM(31));
         assert_eq!(rhs.lhs, None);
-
-
-
     }
-}
 
+
+    #[test] 
+    fn simple_relation_test() {
+        let code = String::from("42  >=   31 ");
+        let mut parser = Parser::load(code);
+        let root = parser.run().unwrap();
+        assert_eq!(root.kind, NodeKind::Geq); 
+        assert_eq!(root.lhs.unwrap().kind, NodeKind::NUM(42));
+        assert_eq!(root.rhs.unwrap().kind, NodeKind::NUM(31));
+    }
+
+    #[test] 
+    fn two_relation_test() {
+        let code = String::from("42 * 31 >=   31 + 42");
+        let mut parser = Parser::load(code);
+        let root = parser.run().unwrap();
+        let lhs = root.lhs.unwrap();
+        let rhs = root.rhs.unwrap();
+        assert_eq!(root.kind, NodeKind::Geq); 
+        assert_eq!(lhs.kind, NodeKind::MUL);
+        assert_eq!(rhs.kind, NodeKind::ADD);
+        assert_eq!(lhs.lhs.unwrap().kind,NodeKind::NUM(42));
+        assert_eq!(lhs.rhs.unwrap().kind,NodeKind::NUM(31));
+        assert_eq!(rhs.lhs.unwrap().kind,NodeKind::NUM(31));
+        assert_eq!(rhs.rhs.unwrap().kind,NodeKind::NUM(42));
+    }
+
+
+}

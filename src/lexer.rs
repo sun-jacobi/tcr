@@ -13,6 +13,7 @@ pub(crate) enum TokenKind {
     Gt,
     Geq,
     Leq,
+    NotEq,
     DoubleEq,
     Eq,
     OpenParen,
@@ -73,6 +74,12 @@ impl Iterator for Lexer {
                             return self.bump(TokenKind::DoubleEq, 2);
                         }
                         return self.bump(TokenKind::Eq, 1);
+                    }
+                    '!' => {
+                        if let Some('=') = self.second() {
+                            return self.bump(TokenKind::NotEq, 2);
+                        }
+                        panic!("Expected `=`");
                     }
                     _ => self.advance(),
                 },
