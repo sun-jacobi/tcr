@@ -1,5 +1,6 @@
 use crate::lexer::Lexer;
 use crate::lexer::Token;
+use crate::lexer::TokenKind;
 
 pub struct Parser {
     lexer: Lexer,
@@ -32,9 +33,9 @@ impl Node {
     }
 
     pub fn new_unary(kind: NodeKind, rhs: Box<Node>) -> Self {
-        Self { 
+        Self {
             kind,
-            lhs: None, 
+            lhs: None,
             rhs: Some(rhs),
         }
     }
@@ -69,13 +70,13 @@ impl Parser {
         let mut node = self.parse_mul()?;
         loop {
             match &self.curr {
-                Some(token) => match **token {
-                    Token::RESERVED('+') => {
+                Some(token) => match token.kind {
+                    TokenKind::Add => {
                         self.consume();
                         let rhs = self.parse_mul()?;
                         node = Box::new(Node::new(NodeKind::ADD, node, rhs));
                     }
-                    Token::RESERVED('-') => {
+                    TokenKind::Minus => {
                         self.consume();
                         let rhs = self.parse_mul()?;
                         node = Box::new(Node::new(NodeKind::SUB, node, rhs));
@@ -91,13 +92,13 @@ impl Parser {
         let mut node = self.parse_unary()?;
         loop {
             match &self.curr {
-                Some(token) => match **token {
-                    Token::RESERVED('*') => {
+                Some(token) => match token.kind {
+                    TokenKind::Star => {
                         self.consume();
                         let rhs = self.parse_unary()?;
                         node = Box::new(Node::new(NodeKind::MUL, node, rhs));
                     }
-                    Token::RESERVED('/') => {
+                    TokenKind::Slash => {
                         self.consume();
                         let rhs = self.parse_unary()?;
                         node = Box::new(Node::new(NodeKind::DIV, node, rhs));
@@ -112,38 +113,39 @@ impl Parser {
     fn parse_unary(&mut self) -> Result<Box<Node>, &'static str> {
         match &self.curr {
             None => Err("No new token"),
-            Some(token) => match **token {
-                Token::RESERVED('+') => {
+            Some(token) => match token.kind {
+                TokenKind::Add => {
                     self.consume();
                     let rhs = self.parse_primary()?;
                     return Ok(Box::new(Node::new_unary(NodeKind::ADD, rhs)));
                 }
-                Token::RESERVED('-') => {
+                TokenKind::Minus => {
                     self.consume();
                     let rhs = self.parse_primary()?;
                     return Ok(Box::new(Node::new_unary(NodeKind::SUB, rhs)));
-                } 
+                }
                 _ => self.parse_primary(),
-            }
-           
+            },
         }
     }
 
     fn parse_primary(&mut self) -> Result<Box<Node>, &'static str> {
         match &self.curr {
-            Some(token) => match **token {
-                Token::RESERVED('(') => {
+            Some(token) => match token.kind.to_owned() {
+                TokenKind::OpenParen => {
                     self.consume();
                     let node = self.parse_expr()?;
-                    if !self.consume_char(')') {
+                    if !self.consume_token(TokenKind::CloseParen) {
                         return Err("invalid parentheses");
                     } else {
                         Ok(node)
                     }
                 }
-                Token::NUM(n) => {
+                TokenKind::Lit(s) => {
                     self.consume();
-                    Ok(Box::new(Node::new_primary(NodeKind::NUM(n))))
+                    Ok(Box::new(Node::new_primary(NodeKind::NUM(
+                        s.parse().unwrap(),
+                    ))))
                 }
                 _ => Err("unexpected token"),
             },
@@ -155,20 +157,16 @@ impl Parser {
         self.lexer.next()
     }
 
-    fn consume_char(&mut self, expected: char) -> bool {
+    fn consume_token(&mut self, expected: TokenKind) -> bool {
         match &self.curr {
             None => false,
-            Some(token) => match **token {
-                Token::RESERVED(actual) => {
-                    if actual == expected {
-                        self.consume();
-                        return true;
-                    } else {
-                        false
-                    }
+            Some(actual) => {
+                if actual.kind == expected {
+                    self.consume();
+                    return true;
                 }
-                _ => false,
-            },
+                false
+            }
         }
     }
 }

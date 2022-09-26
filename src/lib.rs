@@ -3,66 +3,81 @@ pub mod parser;
 
 #[cfg(test)]
 mod lexer_test {
-    use super::lexer::{Lexer, Token};
+    use crate::lexer::TokenKind;
+    use super::lexer::Lexer;
     #[test]
     fn add_test() {
         let code = String::from("42 + 31");
         let mut lexer = Lexer::new(code);
-        assert_eq!(*lexer.next().unwrap(), Token::NUM(42));
-        assert_eq!(*lexer.next().unwrap(), Token::RESERVED('+'));
-        assert_eq!(*lexer.next().unwrap(), Token::NUM(31));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Lit("42".to_string()));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Add);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Lit("31".to_string()));
     }
     #[test]
     fn three_test() {
         let code = String::from(" 42 + 31 + 18");
         let mut lexer = Lexer::new(code);
-        assert_eq!(*lexer.next().unwrap(), Token::NUM(42));
-        assert_eq!(*lexer.next().unwrap(), Token::RESERVED('+'));
-        assert_eq!(*lexer.next().unwrap(), Token::NUM(31));
-        assert_eq!(*lexer.next().unwrap(), Token::RESERVED('+'));
-        assert_eq!(*lexer.next().unwrap(), Token::NUM(18));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Lit("42".to_string()));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Add);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Lit("31".to_string()));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Add);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Lit("18".to_string()));
     }
 
     #[test]
     fn corner_test() {
         let code = String::from(" 42  + 31 +18   ");
         let mut lexer = Lexer::new(code);
-        assert_eq!(*lexer.next().unwrap(), Token::NUM(42));
-        assert_eq!(*lexer.next().unwrap(), Token::RESERVED('+'));
-        assert_eq!(*lexer.next().unwrap(), Token::NUM(31));
-        assert_eq!(*lexer.next().unwrap(), Token::RESERVED('+'));
-        assert_eq!(*lexer.next().unwrap(), Token::NUM(18));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Lit("42".to_string()));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Add);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Lit("31".to_string()));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Add);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Lit("18".to_string()));
     }
 
     #[test]
     fn single_test() {
         let code = String::from(" 42");
         let mut lexer = Lexer::new(code);
-        assert_eq!(*lexer.next().unwrap(), Token::NUM(42));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Lit("42".to_string()));
     }
 
     #[test]
     fn muldiv_test() {
         let code = String::from("42 * 31 / 12");
         let mut lexer = Lexer::new(code);
-        assert_eq!(*lexer.next().unwrap(), Token::NUM(42));
-        assert_eq!(*lexer.next().unwrap(), Token::RESERVED('*'));
-        assert_eq!(*lexer.next().unwrap(), Token::NUM(31));
-        assert_eq!(*lexer.next().unwrap(), Token::RESERVED('/'));
-        assert_eq!(*lexer.next().unwrap(), Token::NUM(12));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Lit("42".to_string()));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Star);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Lit("31".to_string()));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Slash);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Lit("12".to_string()));
     }
 
     #[test]
     fn brackets_test() {
         let code = String::from("(42 * 31 )");
         let mut lexer = Lexer::new(code);
-        assert_eq!(*lexer.next().unwrap(), Token::RESERVED('('));
-        assert_eq!(*lexer.next().unwrap(), Token::NUM(42));
-        assert_eq!(*lexer.next().unwrap(), Token::RESERVED('*'));
-        assert_eq!(*lexer.next().unwrap(), Token::NUM(31));
-        assert_eq!(*lexer.next().unwrap(), Token::RESERVED(')'));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::OpenParen);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Lit("42".to_string()));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Star);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Lit("31".to_string()));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::CloseParen);
+    }
+
+    #[test]
+    fn relational_test() {
+        let code = String::from("42 >= 31 > 28 == 28");
+        let mut lexer = Lexer::new(code);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Lit("42".to_string()));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Geq);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Lit("31".to_string()));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Gt);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Lit("28".to_string()));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::DoubleEq);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Lit("28".to_string()));
     }
 }
+
 
 #[cfg(test)]
 mod parser_test {
@@ -144,8 +159,9 @@ mod parser_test {
         assert_eq!(lhs.rhs.unwrap().kind, NodeKind::NUM(42));
         assert_eq!(rhs.rhs.unwrap().kind, NodeKind::NUM(31));
         assert_eq!(rhs.lhs, None);
-        
-    
-        
+
+
+
     }
 }
+
