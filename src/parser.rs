@@ -16,8 +16,6 @@ pub enum NodeKind {
     DIV,
     Eq,
     NotEq,
-    Geq,
-    Gt,
     Leq,
     Lt,
 }
@@ -41,12 +39,12 @@ impl Node {
     pub fn new_unary(kind: NodeKind, rhs: Box<Node>) -> Self {
         Self {
             kind,
-            lhs: None,
+            lhs: Some(Box::new(Node::new_leaf(NodeKind::NUM(0)))),
             rhs: Some(rhs),
         }
     }
 
-    pub fn new_primary(kind: NodeKind) -> Self {
+    pub fn new_leaf(kind: NodeKind) -> Self {
         Self {
             kind,
             lhs: None,
@@ -108,12 +106,12 @@ impl Parser {
                     TokenKind::Geq => {
                         self.consume();
                         let rhs = self.parse_add()?;
-                        node = Box::new(Node::new(NodeKind::Geq, node, rhs));
+                        node = Box::new(Node::new(NodeKind::Leq, rhs, node));
                     }
                     TokenKind::Gt => {
                         self.consume();
                         let rhs = self.parse_add()?;
-                        node = Box::new(Node::new(NodeKind::Gt, node, rhs));
+                        node = Box::new(Node::new(NodeKind::Lt, rhs, node));
                     }
                     TokenKind::Leq => {
                         self.consume();
@@ -177,19 +175,19 @@ impl Parser {
 
     fn parse_unary(&mut self) -> Result<Box<Node>, &'static str> {
         match &self.curr {
-            None => Err("No new token"),
+            None => return Err("No new token"),
             Some(token) => match token.kind {
                 TokenKind::Add => {
                     self.consume();
-                    let rhs = self.parse_primary()?;
+                    let rhs = self.parse_unary()?;
                     return Ok(Box::new(Node::new_unary(NodeKind::ADD, rhs)));
                 }
                 TokenKind::Minus => {
                     self.consume();
-                    let rhs = self.parse_primary()?;
+                    let rhs = self.parse_unary()?;
                     return Ok(Box::new(Node::new_unary(NodeKind::SUB, rhs)));
                 }
-                _ => self.parse_primary(),
+                _ => return self.parse_primary(),
             },
         }
     }
@@ -208,9 +206,7 @@ impl Parser {
                 }
                 TokenKind::Lit(s) => {
                     self.consume();
-                    Ok(Box::new(Node::new_primary(NodeKind::NUM(
-                        s.parse().unwrap(),
-                    ))))
+                    Ok(Box::new(Node::new_leaf(NodeKind::NUM(s.parse().unwrap()))))
                 }
                 _ => Err("unexpected token"),
             },

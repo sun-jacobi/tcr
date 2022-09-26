@@ -24,12 +24,32 @@ impl Rcc {
         println!("  pop rdi");
         println!("  pop rax");
         match node.kind {
-            NodeKind::ADD => println!("    add rax, rdi"),
-            NodeKind::SUB => println!("    sub rax, rdi"),
-            NodeKind::MUL => println!("    imul rax, rdi"),
+            NodeKind::ADD => println!("  add rax, rdi"),
+            NodeKind::SUB => println!("  sub rax, rdi"),
+            NodeKind::MUL => println!("  imul rax, rdi"),
             NodeKind::DIV => {
                 println!("  cqo");
                 println!("  idiv rdi");
+            }
+            NodeKind::Eq => {
+                println!("  cmp rax, rdi");
+                println!("  sete al");
+                println!("  movzx rax, al")
+            }
+            NodeKind::NotEq => {
+                println!("  cmp rax, rdi");
+                println!("  setne al");
+                println!("  movzx rax, al")
+            }
+            NodeKind::Lt => {
+                println!("  cmp rax, rdi");
+                println!("  setle al");
+                println!("  movzx rax, al")
+            }
+            NodeKind::Leq => {
+                println!("  cmp rax, rdi");
+                println!("  setl al");
+                println!("  movzx rax, al")
             }
             _ => return Err("not expected node"),
         }
@@ -37,13 +57,13 @@ impl Rcc {
         Ok(())
     }
 
-    fn pre() {
+    fn prolog() {
         println!(".intel_syntax noprefix");
         println!(".globl _main");
         println!("_main:");
     }
 
-    fn suf() {
+    fn epilog() {
         println!("  pop rax");
         println!("  ret");
     }
@@ -52,9 +72,9 @@ impl Rcc {
         let src = args().nth(1).expect("Wrong argument number");
         let mut rcc = Rcc::init(src);
         let ast = rcc.parser.run()?;
-        Rcc::pre();
+        Rcc::prolog();
         rcc.gen(ast)?;
-        Rcc::suf();
+        Rcc::epilog();
         Ok(())
     }
 }
