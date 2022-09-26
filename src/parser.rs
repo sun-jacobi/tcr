@@ -15,7 +15,7 @@ pub enum NodeKind {
     DIV,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Node {
     pub kind: NodeKind,
     pub lhs: Option<Box<Node>>,
@@ -27,6 +27,14 @@ impl Node {
         Self {
             kind,
             lhs: Some(lhs),
+            rhs: Some(rhs),
+        }
+    }
+
+    pub fn new_unary(kind: NodeKind, rhs: Box<Node>) -> Self {
+        Self { 
+            kind,
+            lhs: None, 
             rhs: Some(rhs),
         }
     }
@@ -80,24 +88,44 @@ impl Parser {
     }
 
     fn parse_mul(&mut self) -> Result<Box<Node>, &'static str> {
-        let mut node = self.parse_primary()?;
+        let mut node = self.parse_unary()?;
         loop {
             match &self.curr {
                 Some(token) => match **token {
                     Token::RESERVED('*') => {
                         self.consume();
-                        let rhs = self.parse_primary()?;
+                        let rhs = self.parse_unary()?;
                         node = Box::new(Node::new(NodeKind::MUL, node, rhs));
                     }
                     Token::RESERVED('/') => {
                         self.consume();
-                        let rhs = self.parse_primary()?;
+                        let rhs = self.parse_unary()?;
                         node = Box::new(Node::new(NodeKind::DIV, node, rhs));
                     }
                     _ => return Ok(node),
                 },
                 None => return Ok(node),
             }
+        }
+    }
+
+    fn parse_unary(&mut self) -> Result<Box<Node>, &'static str> {
+        match &self.curr {
+            None => Err("No new token"),
+            Some(token) => match **token {
+                Token::RESERVED('+') => {
+                    self.consume();
+                    let rhs = self.parse_primary()?;
+                    return Ok(Box::new(Node::new_unary(NodeKind::ADD, rhs)));
+                }
+                Token::RESERVED('-') => {
+                    self.consume();
+                    let rhs = self.parse_primary()?;
+                    return Ok(Box::new(Node::new_unary(NodeKind::SUB, rhs)));
+                } 
+                _ => self.parse_primary(),
+            }
+           
         }
     }
 

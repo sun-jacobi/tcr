@@ -128,4 +128,24 @@ mod parser_test {
         assert_eq!(rhs.lhs.unwrap().kind, NodeKind::NUM(31));
         assert_eq!(rhs.rhs.unwrap().kind, NodeKind::NUM(1));
     }
+
+    #[test]
+    fn unary_test() {
+        let code = String::from("-42 * +31");
+        let mut parser = Parser::load(code);
+        // root for an ast
+        let root = parser.run().unwrap();
+        let lhs = root.lhs.unwrap();
+        let rhs = root.rhs.unwrap();
+        assert_eq!(root.kind, NodeKind::MUL);
+        assert_eq!(lhs.kind, NodeKind::SUB);
+        assert_eq!(rhs.kind, NodeKind::ADD);
+        assert_eq!(lhs.lhs, None);
+        assert_eq!(lhs.rhs.unwrap().kind, NodeKind::NUM(42));
+        assert_eq!(rhs.rhs.unwrap().kind, NodeKind::NUM(31));
+        assert_eq!(rhs.lhs, None);
+        
+    
+        
+    }
 }
