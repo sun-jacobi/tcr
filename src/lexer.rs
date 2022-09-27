@@ -19,6 +19,7 @@ pub(crate) enum TokenKind {
     OpenParen,
     CloseParen,
     SemiCol,
+    Return,
     Num(String),
     Ident(String),
 }
@@ -47,10 +48,11 @@ impl Token {
 
     pub(crate) fn ident(state: Vec<char>) -> Option<Box<Self>> {
         let len = state.len();
-        Some(Box::new(Self::new(
-            TokenKind::Ident(state.into_iter().collect()),
-            len,
-        )))
+        let word = state.into_iter().collect::<String>();
+        match word.as_str() {
+            "return" => Some(Box::new(Self::new(TokenKind::Return, len))),
+            _ => Some(Box::new(Self::new(TokenKind::Ident(word), len))),
+        }
     }
 }
 

@@ -88,6 +88,13 @@ mod lexer_test {
         assert_eq!(lexer.next().unwrap().kind, TokenKind::Eq);
         assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("0".to_string()));
     }
+    #[test]
+    fn return_test() {
+        let code = String::from("return 42");
+        let mut lexer = Lexer::new(code);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Return);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("42".to_string()));
+    }
 }
 
 #[cfg(test)]
@@ -240,5 +247,15 @@ mod parser_test {
         assert_eq!(third.kind, NodeKind::Assign);
         assert_eq!(third.lhs.unwrap().kind, NodeKind::LVAL(8));
         assert_eq!(third.rhs.unwrap().kind, NodeKind::NUM(31));
+    }
+
+    #[test]
+    fn return_test() {
+        let code = String::from("return 42;");
+        let mut parser = Parser::load(code);
+        parser.init();
+        let root = parser.parse_stmt().unwrap();
+        assert_eq!(root.kind, NodeKind::Return);
+        assert_eq!(root.rhs.unwrap().kind, NodeKind::NUM(42));
     }
 }

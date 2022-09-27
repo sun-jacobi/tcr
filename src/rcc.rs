@@ -31,7 +31,6 @@ impl Rcc {
             println!("  push rax");
             return Ok(());
         }
-
         // assign the right value to lvalue
         if let NodeKind::Assign = node.kind {
             match &node.lhs {
@@ -58,7 +57,9 @@ impl Rcc {
         if let Some(rhs) = node.rhs {
             self.gen(rhs)?;
         }
-
+        if let NodeKind::Return = node.kind {
+            return Ok(());
+        }
         println!("  pop rdi");
         println!("  pop rax");
         match node.kind {
@@ -88,11 +89,6 @@ impl Rcc {
                 println!("  cmp rax, rdi");
                 println!("  setl al");
                 println!("  movzx rax, al")
-            }
-            NodeKind::Assign => {
-                println!("  mov [rax], rdi");
-                println!("  push rdi");
-                return Ok(());
             }
             _ => return Err("not expected node"),
         }
@@ -132,7 +128,6 @@ impl Rcc {
             rcc.gen(stmt)?;
             println!("  pop rax");
         }
-
         Rcc::epilog();
         Ok(())
     }

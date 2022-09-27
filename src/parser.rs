@@ -33,6 +33,7 @@ pub enum NodeKind {
     Leq,
     Lt,
     Assign,
+    Return,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -101,7 +102,14 @@ impl Parser {
         }
     }
 
-    fn parse_stmt(&mut self) -> Result<Box<Node>, &'static str> {
+    pub fn parse_stmt(&mut self) -> Result<Box<Node>, &'static str> {
+        if self.consume_token(TokenKind::Return) {
+            let expr = self.parse_expr()?;
+            if !self.consume_token(TokenKind::SemiCol) {
+                return Err("expected semicolon");
+            }
+            return Ok(Box::new(Node{kind : NodeKind::Return, lhs : None, rhs: Some(expr)}));
+        }
         let expr = self.parse_expr()?;
         if !self.consume_token(TokenKind::SemiCol) {
             return Err("expected semicolon");
