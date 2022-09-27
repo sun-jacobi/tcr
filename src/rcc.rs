@@ -10,17 +10,55 @@ impl Rcc {
         Self { parser }
     }
 
+    // push the variable address into the stack
+    fn addr(offset: u8) {
+        println!("  mov rax, rbp");
+        println!("  sub rax, {}", offset);
+        println!("  push rax");
+    }
+
     fn gen(&mut self, node: Box<Node>) -> Result<(), &'static str> {
         if let NodeKind::NUM(num) = node.kind {
             println!("  push {}", num);
             return Ok(());
         }
+
+        // get the value of variable
+        if let NodeKind::LVAL(offset) = node.kind {
+            Self::addr(offset);
+            println!("  pop rax");
+            println!("  mov rax, [rax]");
+            println!("  push rax");
+            return Ok(());
+        }
+
+        // assign the right value to lvalue
+        if let NodeKind::Assign = node.kind {
+            match &node.lhs {
+                None => return Err("expected lvalue"),
+                Some(lhs) => match lhs.kind {
+                    NodeKind::LVAL(offset) => {
+                        Self::addr(offset);
+                        self.gen(node.rhs.unwrap())?;
+                        println!("  pop rdi");
+                        println!("  pop rax");
+                        println!("  mov [rax], rdi");
+                        println!("  push rdi");
+                        return Ok(());
+                    }
+                    _ => return Err("expected lvalue"),
+                },
+            }
+        }
+
         if let Some(lhs) = node.lhs {
             self.gen(lhs)?;
         }
+
         if let Some(rhs) = node.rhs {
             self.gen(rhs)?;
         }
+
         println!("  pop rdi");
         println!("  pop rax");
         match node.kind {
@@ -51,29 +89,50 @@ impl Rcc {
                 println!("  setl al");
                 println!("  movzx rax, al")
             }
+            NodeKind::Assign => {
+                println!("  mov [rax], rdi");
+                println!("  push rdi");
+                return Ok(());
+            }
             _ => return Err("not expected node"),
         }
         println!("  push rax");
         Ok(())
     }
 
-    fn prolog() {
+    fn prefix() {
         println!(".intel_syntax noprefix");
         println!(".globl _main");
         println!("_main:");
     }
 
+    // rbp : base pointer
+    // rsp : stack pointer
+    fn prolog() {
+        println!("  push rbp");
+        println!("  mov rbp, rsp");
+        println!("  sub rsp, 208");
+    }
+
     fn epilog() {
-        println!("  pop rax");
+        println!("  mov rsp, rbp");
+        println!("  pop rbp");
         println!("  ret");
     }
 
     pub fn run() -> Result<(), &'static str> {
         let src = args().nth(1).expect("Wrong argument number");
         let mut rcc = Rcc::init(src);
-        let ast = rcc.parser.run()?;
+        let program = rcc.parser.run()?;
+
+        Rcc::prefix();
         Rcc::prolog();
-        rcc.gen(ast)?;
+
+        for stmt in program {
+            rcc.gen(stmt)?;
+            println!("  pop rax");
+        }
+
         Rcc::epilog();
         Ok(())
     }

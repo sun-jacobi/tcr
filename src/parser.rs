@@ -5,11 +5,25 @@ use crate::lexer::TokenKind;
 pub struct Parser {
     lexer: Lexer,
     curr: Option<Box<Token>>,
+    local: Vec<LVal>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+struct LVal {
+    name: String,
+    offset: u8,
+}
+
+impl LVal {
+    fn new(name: String, offset: u8) -> Self {
+        Self { name, offset }
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum NodeKind {
     NUM(i64),
+    LVAL(u8),
     ADD,
     SUB,
     MUL,
@@ -18,6 +32,7 @@ pub enum NodeKind {
     NotEq,
     Leq,
     Lt,
+    Assign,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -58,21 +73,62 @@ impl Parser {
         Self {
             lexer: Lexer::new(src),
             curr: None,
+            local: Vec::new(),
         }
     }
 
     fn consume(&mut self) {
         self.curr = self.next_token();
     }
-
-    pub fn run(&mut self) -> Result<Box<Node>, &'static str> {
-        self.consume();
-        self.parse_expr()
+    #[allow(dead_code)]
+    pub(crate) fn init(&mut self) {
+        self.consume()
     }
 
-    fn parse_expr(&mut self) -> Result<Box<Node>, &'static str> {
-        let node = self.parse_equality()?;
+    pub fn run(&mut self) -> Result<Vec<Box<Node>>, &'static str> {
+        self.consume();
+        self.parse_program()
+    }
+
+    fn parse_program(&mut self) -> Result<Vec<Box<Node>>, &'static str> {
+        let mut code = Vec::new();
+        loop {
+            if let None = self.curr {
+                return Ok(code);
+            }
+            let stmt = self.parse_stmt()?;
+            code.push(stmt);
+        }
+    }
+
+    fn parse_stmt(&mut self) -> Result<Box<Node>, &'static str> {
+        let expr = self.parse_expr()?;
+        if !self.consume_token(TokenKind::SemiCol) {
+            return Err("expected semicolon");
+        }
+        Ok(expr)
+    }
+
+    pub fn parse_expr(&mut self) -> Result<Box<Node>, &'static str> {
+        let node = self.parse_assign()?;
         Ok(node)
+    }
+
+    fn parse_assign(&mut self) -> Result<Box<Node>, &'static str> {
+        let mut node = self.parse_equality()?;
+        loop {
+            match &self.curr {
+                None => return Ok(node),
+                Some(token) => match token.kind {
+                    TokenKind::Eq => {
+                        self.consume();
+                        let rhs = self.parse_assign()?;
+                        node = Box::new(Node::new(NodeKind::Assign, node, rhs));
+                    }
+                    _ => return Ok(node),
+                },
+            }
+        }
     }
 
     fn parse_equality(&mut self) -> Result<Box<Node>, &'static str> {
@@ -204,9 +260,22 @@ impl Parser {
                         Ok(node)
                     }
                 }
-                TokenKind::Lit(s) => {
+                TokenKind::Num(s) => {
                     self.consume();
                     Ok(Box::new(Node::new_leaf(NodeKind::NUM(s.parse().unwrap()))))
+                }
+                TokenKind::Ident(name) => {
+                    self.consume();
+                    if let Some(offset) = self.find_lval(&name) {
+                        return Ok(Box::new(Node::new_leaf(NodeKind::LVAL(offset))));
+                    }
+                    if let None = self.local.last() {
+                        self.local.push(LVal::new(name, 8));
+                        return Ok(Box::new(Node::new_leaf(NodeKind::LVAL(8))));
+                    }
+                    let offset = self.local.last().unwrap().offset + 8;
+                    self.local.push(LVal::new(name, offset));
+                    Ok(Box::new(Node::new_leaf(NodeKind::LVAL(offset))))
                 }
                 _ => Err("unexpected token"),
             },
@@ -216,6 +285,10 @@ impl Parser {
 
     fn next_token(&mut self) -> Option<Box<Token>> {
         self.lexer.next()
+    }
+    fn find_lval(&self, ident: &str) -> Option<u8> {
+        let lval = self.local.iter().find(|lval| lval.name == ident)?;
+        Some(lval.offset)
     }
 
     fn consume_token(&mut self, expected: TokenKind) -> bool {

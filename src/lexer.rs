@@ -18,7 +18,9 @@ pub(crate) enum TokenKind {
     Eq,
     OpenParen,
     CloseParen,
-    Lit(String),
+    SemiCol,
+    Num(String),
+    Ident(String),
 }
 
 #[derive(Debug, PartialEq)]
@@ -34,10 +36,19 @@ impl Token {
     pub(crate) fn sym(kind: TokenKind, len: usize) -> Option<Box<Self>> {
         Some(Box::new(Self::new(kind, len)))
     }
-    pub(crate) fn lit(state: Vec<char>) -> Option<Box<Self>> {
+
+    pub(crate) fn num(state: Vec<char>) -> Option<Box<Self>> {
         let len = state.len();
         Some(Box::new(Self::new(
-            TokenKind::Lit(state.into_iter().collect()),
+            TokenKind::Num(state.into_iter().collect()),
+            len,
+        )))
+    }
+
+    pub(crate) fn ident(state: Vec<char>) -> Option<Box<Self>> {
+        let len = state.len();
+        Some(Box::new(Self::new(
+            TokenKind::Ident(state.into_iter().collect()),
             len,
         )))
     }
@@ -50,13 +61,15 @@ impl Iterator for Lexer {
             match self.first() {
                 None => return None,
                 Some(&c) => match c {
-                    '1'..='9' => return self.eat(),
+                    '0'..='9' => return self.num(),
+                    'a'..='z' | 'A'..='Z' => return self.ident(),
                     '(' => return self.bump(TokenKind::OpenParen, 1),
                     ')' => return self.bump(TokenKind::CloseParen, 1),
                     '+' => return self.bump(TokenKind::Add, 1),
                     '-' => return self.bump(TokenKind::Minus, 1),
                     '*' => return self.bump(TokenKind::Star, 1),
                     '/' => return self.bump(TokenKind::Slash, 1),
+                    ';' => return self.bump(TokenKind::SemiCol, 1),
                     '>' => {
                         if let Some('=') = self.second() {
                             return self.bump(TokenKind::Geq, 2);
@@ -96,21 +109,37 @@ impl Lexer {
         }
     }
 
-    fn eat(&mut self) -> Option<Box<Token>> {
+    fn num(&mut self) -> Option<Box<Token>> {
         let mut state: Vec<char> = Vec::new();
         loop {
             match self.first() {
-                None => return Token::lit(state),
+                None => return Token::num(state),
                 Some(&c) => match c {
                     '0'..='9' => {
                         state.push(c);
                         self.cursor += 1;
                     }
-                    _ => return Token::lit(state),
+                    _ => return Token::num(state),
                 },
             }
         }
     }
+    fn ident(&mut self) -> Option<Box<Token>> {
+        let mut state: Vec<char> = Vec::new();
+        loop {
+            match self.first() {
+                None => return Token::ident(state),
+                Some(&c) => match c {
+                    'a'..='z' | 'A'..='Z' => {
+                        state.push(c);
+                        self.cursor += 1;
+                    }
+                    _ => return Token::ident(state),
+                },
+            }
+        }
+    }
+
     fn bump(&mut self, kind: TokenKind, len: usize) -> Option<Box<Token>> {
         self.cursor += len;
         Token::sym(kind, len)
