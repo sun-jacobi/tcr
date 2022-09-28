@@ -20,6 +20,10 @@ pub(crate) enum TokenKind {
     CloseParen,
     SemiCol,
     Return,
+    If,
+    For,
+    While,
+    Else,
     Num(String),
     Ident(String),
 }
@@ -46,10 +50,14 @@ impl Token {
         )))
     }
 
-    pub(crate) fn ident(state: Vec<char>) -> Option<Box<Self>> {
+    pub(crate) fn word(state: Vec<char>) -> Option<Box<Self>> {
         let len = state.len();
         let word = state.into_iter().collect::<String>();
         match word.as_str() {
+            "else" => Some(Box::new(Self::new(TokenKind::Else, len))),
+            "if" => Some(Box::new(Self::new(TokenKind::If, len))),
+            "while" => Some(Box::new(Self::new(TokenKind::While, len))),
+            "for" => Some(Box::new(Self::new(TokenKind::For, len))),
             "return" => Some(Box::new(Self::new(TokenKind::Return, len))),
             _ => Some(Box::new(Self::new(TokenKind::Ident(word), len))),
         }
@@ -64,7 +72,7 @@ impl Iterator for Lexer {
                 None => return None,
                 Some(&c) => match c {
                     '0'..='9' => return self.num(),
-                    'a'..='z' | 'A'..='Z' => return self.ident(),
+                    'a'..='z' | 'A'..='Z' => return self.word(),
                     '(' => return self.bump(TokenKind::OpenParen, 1),
                     ')' => return self.bump(TokenKind::CloseParen, 1),
                     '+' => return self.bump(TokenKind::Add, 1),
@@ -126,17 +134,17 @@ impl Lexer {
             }
         }
     }
-    fn ident(&mut self) -> Option<Box<Token>> {
+    fn word(&mut self) -> Option<Box<Token>> {
         let mut state: Vec<char> = Vec::new();
         loop {
             match self.first() {
-                None => return Token::ident(state),
+                None => return Token::word(state),
                 Some(&c) => match c {
                     'a'..='z' | 'A'..='Z' => {
                         state.push(c);
                         self.cursor += 1;
                     }
-                    _ => return Token::ident(state),
+                    _ => return Token::word(state),
                 },
             }
         }

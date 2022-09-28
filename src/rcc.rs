@@ -18,6 +18,11 @@ impl Rcc {
     }
 
     fn gen(&mut self, node: Box<Node>) -> Result<(), &'static str> {
+
+        if let NodeKind::Nop = node.kind {
+            println!("  nop");
+            return  Ok(());
+        }
         if let NodeKind::NUM(num) = node.kind {
             println!("  push {}", num);
             return Ok(());
@@ -89,7 +94,7 @@ impl Rcc {
                 println!("  cmp rax, rdi");
                 println!("  setl al");
                 println!("  movzx rax, al")
-            }
+            },
             _ => return Err("not expected node"),
         }
         println!("  push rax");
@@ -125,9 +130,15 @@ impl Rcc {
         Rcc::prolog();
 
         for stmt in program {
+            if let NodeKind::Return = stmt.kind {
+                rcc.gen(stmt)?;
+                println!("  pop rax");
+                break;
+            }
             rcc.gen(stmt)?;
             println!("  pop rax");
         }
+
         Rcc::epilog();
         Ok(())
     }

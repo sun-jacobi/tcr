@@ -28,10 +28,18 @@ pub enum NodeKind {
     SUB,
     MUL,
     DIV,
+    If(Box<Node>),
+    While,
+    For {
+        init: Box<Node>,
+        end: Box<Node>,
+        inc: Box<Node>,
+    },
     Eq,
     NotEq,
     Leq,
     Lt,
+    Nop,
     Assign,
     Return,
 }
@@ -103,12 +111,76 @@ impl Parser {
     }
 
     pub fn parse_stmt(&mut self) -> Result<Box<Node>, &'static str> {
+        // nop
+        if self.consume_token(TokenKind::SemiCol) {
+            return Ok(Box::new(Node::new_leaf(NodeKind::Nop)));
+        }
+        // if else
+        if self.consume_token(TokenKind::If) {
+            if !self.consume_token(TokenKind::OpenParen) {
+                return Err("expected open parenthesis");
+            }
+            let expr = self.parse_expr()?;
+            if !self.consume_token(TokenKind::CloseParen) {
+                return Err("expected close parenthesis");
+            }
+            let lhs = self.parse_stmt()?;
+            if self.consume_token(TokenKind::Else) {
+                let rhs = self.parse_stmt()?;
+                return Ok(Box::new(Node::new(NodeKind::If(expr), lhs, rhs)));
+            }
+            return Ok(Box::new(Node {
+                kind: NodeKind::If(expr),
+                lhs: Some(lhs),
+                rhs: None,
+            }));
+        }
+        // while statement
+        if self.consume_token(TokenKind::While) {
+            if !self.consume_token(TokenKind::OpenParen) {
+                return Err("expected open parenthesis");
+            }
+            let expr = self.parse_expr()?;
+            if !self.consume_token(TokenKind::CloseParen) {
+                return Err("expected close parenthesis");
+            }
+            let stmt = self.parse_stmt()?;
+            return Ok(Box::new(Node {
+                kind: NodeKind::While,
+                lhs: Some(expr),
+                rhs: Some(stmt),
+            }));
+        }
+        // for statement
+        if self.consume_token(TokenKind::For) {
+            if !self.consume_token(TokenKind::OpenParen) {
+                return Err("expected open parenthesis");
+            }
+            let init = self.parse_stmt()?;
+            let end = self.parse_stmt()?;
+            let inc = self.parse_expr()?;
+            if !self.consume_token(TokenKind::CloseParen) {
+                return Err("expected close parenthesis");
+            }
+            let stmt = self.parse_stmt()?;
+            return Ok(Box::new(Node {
+                kind: NodeKind::For { init, end, inc },
+                lhs: Some(stmt),
+                rhs: None,
+            }));
+        }
+
+        // return
         if self.consume_token(TokenKind::Return) {
             let expr = self.parse_expr()?;
             if !self.consume_token(TokenKind::SemiCol) {
                 return Err("expected semicolon");
             }
-            return Ok(Box::new(Node{kind : NodeKind::Return, lhs : None, rhs: Some(expr)}));
+            return Ok(Box::new(Node {
+                kind: NodeKind::Return,
+                lhs: None,
+                rhs: Some(expr),
+            }));
         }
         let expr = self.parse_expr()?;
         if !self.consume_token(TokenKind::SemiCol) {

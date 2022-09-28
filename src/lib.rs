@@ -95,6 +95,21 @@ mod lexer_test {
         assert_eq!(lexer.next().unwrap().kind, TokenKind::Return);
         assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("42".to_string()));
     }
+
+    #[test]
+    fn for_test() {
+        let code = String::from("if ( a > 42 )");
+        let mut lexer = Lexer::new(code);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::If);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::OpenParen);
+        assert_eq!(
+            lexer.next().unwrap().kind,
+            TokenKind::Ident("a".to_string())
+        );
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Gt);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("42".to_string()));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::CloseParen);
+    }
 }
 
 #[cfg(test)]
@@ -257,5 +272,73 @@ mod parser_test {
         let root = parser.parse_stmt().unwrap();
         assert_eq!(root.kind, NodeKind::Return);
         assert_eq!(root.rhs.unwrap().kind, NodeKind::NUM(42));
+    }
+
+
+    #[test] 
+    fn if_sinple_test() {
+       let code = String::from("if (42) return 42;");
+       let mut parser = Parser::load(code);
+       let stmts = parser.run().unwrap();
+       assert_eq!(stmts.len(), 1);
+       let stmt = stmts[0].clone();
+       if let NodeKind::If(expr) = stmt.kind {
+            assert_eq!(expr.kind, NodeKind::NUM(42));
+       } else {
+            panic!("expected if statement");
+       }
+       let lhs = stmt.lhs.unwrap(); 
+       let rhs = stmt.rhs;
+       assert_eq!(lhs.kind, NodeKind::Return);
+       assert_eq!(rhs, None);    
+    }
+    #[test] 
+    fn if_else_test() {
+       let code = String::from("if (42) return 42; else return 31;");
+       let mut parser = Parser::load(code);
+       let stmts = parser.run().unwrap();
+       assert_eq!(stmts.len(), 1);
+       let stmt = stmts[0].clone();
+       if let NodeKind::If(expr) = stmt.kind {
+            assert_eq!(expr.kind, NodeKind::NUM(42));
+       } else {
+            panic!("expected if statement");
+       }
+       let lhs = stmt.lhs.unwrap(); 
+       let rhs = stmt.rhs.unwrap();
+       assert_eq!(lhs.kind, NodeKind::Return);
+       assert_eq!(rhs.kind, NodeKind::Return); 
+    }
+
+
+    #[test] 
+    fn for_test() {
+        let code = String::from("for(a=2; a <= 4; a = a + 1) ;");
+        let mut parser = Parser::load(code);
+        let stmts = parser.run().unwrap();
+        assert_eq!(stmts.len(), 1);
+        let stmt = stmts[0].clone();
+        if let NodeKind::For{init, end, inc } = stmt.kind {
+            assert_eq!(init.kind, NodeKind::Assign);
+            assert_eq!(end.kind, NodeKind::Leq);
+            assert_eq!(inc.kind, NodeKind::Assign);
+       } else {
+            panic!("expected for statement");
+       }
+       let lhs = stmt.lhs.unwrap(); 
+       assert_eq!(lhs.kind, NodeKind::Nop);
+    }
+    #[test] 
+    fn while_test() {
+        let code = String::from("while(42) ;");
+        let mut parser = Parser::load(code);
+        let stmts = parser.run().unwrap();
+        assert_eq!(stmts.len(), 1);
+        let node = stmts[0].clone();
+        let lhs = node.lhs.unwrap();
+        let rhs = node.rhs.unwrap();
+        assert_eq!(node.kind,  NodeKind::While);
+        assert_eq!(lhs.kind, NodeKind::NUM(42));
+        assert_eq!(rhs.kind, NodeKind::Nop);  
     }
 }
