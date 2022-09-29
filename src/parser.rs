@@ -28,6 +28,7 @@ pub enum NodeKind {
     SUB,
     MUL,
     DIV,
+    Block(Vec<Box<Node>>),
     If(Box<Node>),
     While,
     For {
@@ -114,6 +115,23 @@ impl Parser {
         // nop
         if self.consume_token(TokenKind::SemiCol) {
             return Ok(Box::new(Node::new_leaf(NodeKind::Nop)));
+        }
+
+        // Block
+        if self.consume_token(TokenKind::OpenCur) {
+            let mut stmts = Vec::new();
+            loop {
+                match &self.curr {
+                    None => return Err("no new token"),
+                    Some(token) => match token.kind {
+                        TokenKind::CloseCur => {
+                            self.consume();
+                            return Ok(Box::new(Node::new_leaf(NodeKind::Block(stmts))));
+                        }
+                        _ => stmts.push(self.parse_stmt()?),
+                    },
+                }
+            }
         }
         // if else
         if self.consume_token(TokenKind::If) {

@@ -16,8 +16,10 @@ pub(crate) enum TokenKind {
     NotEq,
     DoubleEq,
     Eq,
-    OpenParen,
-    CloseParen,
+    OpenParen,  // (
+    CloseParen, // )
+    OpenCur,    // {
+    CloseCur,   // }
     SemiCol,
     Return,
     If,
@@ -73,6 +75,8 @@ impl Iterator for Lexer {
                 Some(&c) => match c {
                     '0'..='9' => return self.num(),
                     'a'..='z' | 'A'..='Z' => return self.word(),
+                    '{' => return self.bump(TokenKind::OpenCur, 1),
+                    '}' => return self.bump(TokenKind::CloseCur, 1),
                     '(' => return self.bump(TokenKind::OpenParen, 1),
                     ')' => return self.bump(TokenKind::CloseParen, 1),
                     '+' => return self.bump(TokenKind::Add, 1),

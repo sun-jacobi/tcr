@@ -110,6 +110,16 @@ mod lexer_test {
         assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("42".to_string()));
         assert_eq!(lexer.next().unwrap().kind, TokenKind::CloseParen);
     }
+
+    #[test]
+    fn block_test() {
+        let code = String::from("{42;}");
+        let mut lexer = Lexer::new(code);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::OpenCur);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("42".to_string()));
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::SemiCol);
+        assert_eq!(lexer.next().unwrap().kind, TokenKind::CloseCur);
+    }
 }
 
 #[cfg(test)]
@@ -321,7 +331,7 @@ mod parser_test {
             assert_eq!(end.kind, NodeKind::Leq);
             assert_eq!(inc.kind, NodeKind::Assign);
         } else {
-            panic!("expected for statement");
+            panic!("expected statement");
         }
         let lhs = stmt.lhs.unwrap();
         assert_eq!(lhs.kind, NodeKind::Nop);
@@ -338,5 +348,41 @@ mod parser_test {
         assert_eq!(node.kind, NodeKind::While);
         assert_eq!(lhs.kind, NodeKind::NUM(42));
         assert_eq!(rhs.kind, NodeKind::Nop);
+    }
+
+    #[test]
+    fn block_test() {
+        let code = String::from("{42; 31;}");
+        let mut parser = Parser::load(code);
+        let stmts = parser.run().unwrap();
+        assert_eq!(stmts.len(), 1);
+        let node = stmts[0].clone();
+        if let NodeKind::Block(block) = node.kind {
+            assert_eq!(block.len(), 2);
+            let first = block[0].clone();
+            let second = block[1].clone();
+            assert_eq!(first.kind, NodeKind::NUM(42));
+            assert_eq!(second.kind, NodeKind::NUM(31));
+        } else {
+            panic!("expected block");
+        }
+    }
+    #[test]
+    fn if_block_test() {
+        let code = String::from("if (a > 1) {42;}");
+        let mut parser = Parser::load(code);
+        let stmts = parser.run().unwrap();
+        assert_eq!(stmts.len(), 1);
+        let node = stmts[0].clone();
+        if let NodeKind::If(_) = node.kind {
+            let block = node.lhs.unwrap();
+            if let NodeKind::Block(stmt) = block.kind {
+                assert_eq!(stmt.len(), 1);
+            } else {
+                panic!("expected block");
+            }
+        } else {
+            panic!("expected if statement");
+        }
     }
 }
