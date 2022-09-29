@@ -158,6 +158,15 @@ impl Parser {
             }
             let init = self.parse_stmt()?;
             let end = self.parse_stmt()?;
+            if self.consume_token(TokenKind::CloseParen) {
+                let inc = Box::new(Node::new_leaf(NodeKind::Nop));
+                let stmt = self.parse_stmt()?;
+                return Ok(Box::new(Node {
+                    kind: NodeKind::For { init, end, inc },
+                    lhs: Some(stmt),
+                    rhs: None,
+                }));
+            }
             let inc = self.parse_expr()?;
             if !self.consume_token(TokenKind::CloseParen) {
                 return Err("expected close parenthesis");

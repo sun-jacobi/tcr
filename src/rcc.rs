@@ -18,18 +18,48 @@ impl Rcc {
         println!("  push rax");
     }
 
-    fn peek_mangle(&self) -> u8 {
-        self.mangle
-    }
-    fn pop_mangle(&mut self) -> u8 {
+    fn pop_mangle(&mut self) -> String {
         let mangle = self.mangle;
         self.mangle += 1;
-        return mangle;
+        format!(".L{}", mangle)
     }
 
     fn gen(&mut self, node: Box<Node>) -> Result<(), &'static str> {
         if let NodeKind::Nop = node.kind {
             println!("  nop");
+            return Ok(());
+        }
+
+        if let NodeKind::For { init, end, inc } = node.kind {
+            let stmt = node.lhs.unwrap();
+            self.gen(init)?;
+            let condition_mangle = self.pop_mangle();
+            let end_mangle = self.pop_mangle();
+            println!("{}:", condition_mangle);
+            self.gen(end)?;
+            println!("  pop rax");
+            println!("  cmp rax, 0"); // if A = 0
+            println!("  je {}", end_mangle);
+            self.gen(stmt)?;
+            self.gen(inc)?;
+            println!("  jmp {}", condition_mangle);
+            println!("{}:", end_mangle);
+            return Ok(());
+        }
+
+        if let NodeKind::While = node.kind {
+            let condition = node.lhs.unwrap();
+            let stmt = node.rhs.unwrap();
+            let condtion_mangle = self.pop_mangle();
+            println!("{}:", condtion_mangle);
+            self.gen(condition)?;
+            println!("  pop rax");
+            println!("  cmp rax, 0"); // if A = 0
+            let end_mangle = self.pop_mangle();
+            println!("  je {}", end_mangle);
+            self.gen(stmt)?;
+            println!("  jmp {}", condtion_mangle);
+            println!("{}:", end_mangle);
             return Ok(());
         }
 
@@ -41,20 +71,24 @@ impl Rcc {
                 // if-else
                 Some(rhs) => {
                     let else_mangle = self.pop_mangle();
-                    println!(" je .L{}", else_mangle);
+                    println!(" je {}", else_mangle);
                     self.gen(node.lhs.unwrap())?;
-                    println!("  jmp .L{}", self.peek_mangle());
-                    println!(".L{}:", else_mangle);
+                    let end_mangle = self.pop_mangle();
+                    println!("  jmp {}", end_mangle);
+                    println!("{}:", else_mangle);
                     self.gen(rhs)?;
+                    println!("{}:", end_mangle);
+                    return Ok(());
                 }
                 // if
                 None => {
-                    println!("  je .L{}", self.peek_mangle());
+                    let end_mangle = self.pop_mangle();
+                    println!("  je {}", end_mangle);
                     self.gen(node.lhs.unwrap())?;
+                    println!("{}:", end_mangle);
+                    return Ok(());
                 }
             }
-            println!(".L{}:", self.pop_mangle());
-            return Ok(());
         }
         if let NodeKind::NUM(num) = node.kind {
             println!("  push {}", num);
@@ -120,12 +154,12 @@ impl Rcc {
             }
             NodeKind::Lt => {
                 println!("  cmp rax, rdi");
-                println!("  setle al");
+                println!("  setl al");
                 println!("  movzx rax, al")
             }
             NodeKind::Leq => {
                 println!("  cmp rax, rdi");
-                println!("  setl al");
+                println!("  setle al");
                 println!("  movzx rax, al")
             }
             _ => return Err("not expected node"),
