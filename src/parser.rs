@@ -156,18 +156,27 @@ impl Parser {
             if !self.consume_token(TokenKind::OpenParen) {
                 return Err("expected open parenthesis");
             }
-            let init = self.parse_stmt()?;
-            let end = self.parse_stmt()?;
-            if self.consume_token(TokenKind::CloseParen) {
-                let inc = Box::new(Node::new_leaf(NodeKind::Nop));
-                let stmt = self.parse_stmt()?;
-                return Ok(Box::new(Node {
-                    kind: NodeKind::For { init, end, inc },
-                    lhs: Some(stmt),
-                    rhs: None,
-                }));
+            let init = if self.peek_token(TokenKind::SemiCol) {
+                Box::new(Node::new_leaf(NodeKind::Nop))
+            } else {
+                self.parse_expr()?
+            };
+            if !self.consume_token(TokenKind::SemiCol) {
+                return Err("expected semicolon");
             }
-            let inc = self.parse_expr()?;
+            let end = if self.peek_token(TokenKind::SemiCol) {
+                Box::new(Node::new_leaf(NodeKind::Nop))
+            } else {
+                self.parse_expr()?
+            };
+            if !self.consume_token(TokenKind::SemiCol) {
+                return Err("expected semicolon");
+            }
+            let inc = if self.peek_token(TokenKind::SemiCol) {
+                Box::new(Node::new_leaf(NodeKind::Nop))
+            } else {
+                self.parse_expr()?
+            };
             if !self.consume_token(TokenKind::CloseParen) {
                 return Err("expected close parenthesis");
             }
@@ -378,6 +387,18 @@ impl Parser {
     fn find_lval(&self, ident: &str) -> Option<u8> {
         let lval = self.local.iter().find(|lval| lval.name == ident)?;
         Some(lval.offset)
+    }
+
+    fn peek_token(&mut self, expected: TokenKind) -> bool {
+        match &self.curr {
+            None => false,
+            Some(actual) => {
+                if actual.kind == expected {
+                    return true;
+                }
+                false
+            }
+        }
     }
 
     fn consume_token(&mut self, expected: TokenKind) -> bool {
