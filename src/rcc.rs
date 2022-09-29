@@ -3,11 +3,12 @@ use std::env::args;
 
 pub struct Rcc {
     parser: Parser,
+    mangle: u8,
 }
 impl Rcc {
     pub fn init(src: String) -> Self {
         let parser = Parser::load(src);
-        Self { parser }
+        Self { parser, mangle: 1 }
     }
 
     // push the variable address into the stack
@@ -17,11 +18,43 @@ impl Rcc {
         println!("  push rax");
     }
 
-    fn gen(&mut self, node: Box<Node>) -> Result<(), &'static str> {
+    fn peek_mangle(&self) -> u8 {
+        self.mangle
+    }
+    fn pop_mangle(&mut self) -> u8 {
+        let mangle = self.mangle;
+        self.mangle += 1;
+        return mangle;
+    }
 
+    fn gen(&mut self, node: Box<Node>) -> Result<(), &'static str> {
         if let NodeKind::Nop = node.kind {
             println!("  nop");
-            return  Ok(());
+            return Ok(());
+        }
+
+        if let NodeKind::If(condition) = node.kind {
+            self.gen(condition)?;
+            println!("  pop rax");
+            println!("  cmp rax, 0"); // if A = 0
+            match node.rhs {
+                // if-else
+                Some(rhs) => {
+                    let else_mangle = self.pop_mangle();
+                    println!(" je .L{}", else_mangle);
+                    self.gen(node.lhs.unwrap())?;
+                    println!("  jmp .L{}", self.peek_mangle());
+                    println!(".L{}:", else_mangle);
+                    self.gen(rhs)?;
+                }
+                // if
+                None => {
+                    println!("  je .L{}", self.peek_mangle());
+                    self.gen(node.lhs.unwrap())?;
+                }
+            }
+            println!(".L{}:", self.pop_mangle());
+            return Ok(());
         }
         if let NodeKind::NUM(num) = node.kind {
             println!("  push {}", num);
@@ -94,7 +127,7 @@ impl Rcc {
                 println!("  cmp rax, rdi");
                 println!("  setl al");
                 println!("  movzx rax, al")
-            },
+            }
             _ => return Err("not expected node"),
         }
         println!("  push rax");
