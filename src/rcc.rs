@@ -30,6 +30,14 @@ impl Rcc {
             return Ok(());
         }
 
+        if let NodeKind::Block(stmts) = node.kind {
+            for stmt in stmts {
+                self.gen(stmt)?;
+                println!("  pop rax");
+            }
+            return Ok(());
+        }
+
         if let NodeKind::For { init, end, inc } = node.kind {
             let stmt = node.lhs.unwrap();
             self.gen(init)?;
@@ -129,9 +137,13 @@ impl Rcc {
         if let Some(rhs) = node.rhs {
             self.gen(rhs)?;
         }
+
         if let NodeKind::Return = node.kind {
+            println!("  pop rax");
+            Rcc::epilog();
             return Ok(());
         }
+
         println!("  pop rdi");
         println!("  pop rax");
         match node.kind {
@@ -197,11 +209,6 @@ impl Rcc {
         Rcc::prolog();
 
         for stmt in program {
-            if let NodeKind::Return = stmt.kind {
-                rcc.gen(stmt)?;
-                println!("  pop rax");
-                break;
-            }
             rcc.gen(stmt)?;
             println!("  pop rax");
         }
