@@ -170,3 +170,122 @@ impl Lexer {
         self.characters.get(self.cursor)
     }
 }
+
+//------------------------------------------------------------------------
+
+#[cfg(test)]
+#[test]
+fn add_test() {
+    let code = String::from("42 + 31");
+    let mut lexer = Lexer::new(code);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("42".to_string()));
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Add);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("31".to_string()));
+}
+#[test]
+fn three_test() {
+    let code = String::from(" 42 + 31 + 18");
+    let mut lexer = Lexer::new(code);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("42".to_string()));
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Add);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("31".to_string()));
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Add);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("18".to_string()));
+}
+
+#[test]
+fn corner_test() {
+    let code = String::from(" 42  + 31 +18   ");
+    let mut lexer = Lexer::new(code);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("42".to_string()));
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Add);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("31".to_string()));
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Add);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("18".to_string()));
+}
+
+#[test]
+fn single_test() {
+    let code = String::from(" 42");
+    let mut lexer = Lexer::new(code);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("42".to_string()));
+}
+
+#[test]
+fn muldiv_test() {
+    let code = String::from("42 * 31 / 12");
+    let mut lexer = Lexer::new(code);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("42".to_string()));
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Star);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("31".to_string()));
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Slash);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("12".to_string()));
+}
+
+#[test]
+fn brackets_test() {
+    let code = String::from("(42 * 31 )");
+    let mut lexer = Lexer::new(code);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::OpenParen);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("42".to_string()));
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Star);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("31".to_string()));
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::CloseParen);
+}
+
+#[test]
+fn relational_test() {
+    let code = String::from("42 >= 31 > 28 == 28");
+    let mut lexer = Lexer::new(code);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("42".to_string()));
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Geq);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("31".to_string()));
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Gt);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("28".to_string()));
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::DoubleEq);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("28".to_string()));
+}
+
+#[test]
+fn assign_test() {
+    let code = String::from("a=0");
+    let mut lexer = Lexer::new(code);
+    assert_eq!(
+        lexer.next().unwrap().kind,
+        TokenKind::Ident("a".to_string())
+    );
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Eq);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("0".to_string()));
+}
+#[test]
+fn return_test() {
+    let code = String::from("return 42");
+    let mut lexer = Lexer::new(code);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Return);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("42".to_string()));
+}
+
+#[test]
+fn for_test() {
+    let code = String::from("if ( a > 42 )");
+    let mut lexer = Lexer::new(code);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::If);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::OpenParen);
+    assert_eq!(
+        lexer.next().unwrap().kind,
+        TokenKind::Ident("a".to_string())
+    );
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Gt);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("42".to_string()));
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::CloseParen);
+}
+
+#[test]
+fn block_test() {
+    let code = String::from("{42;}");
+    let mut lexer = Lexer::new(code);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::OpenCur);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("42".to_string()));
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::SemiCol);
+    assert_eq!(lexer.next().unwrap().kind, TokenKind::CloseCur);
+}

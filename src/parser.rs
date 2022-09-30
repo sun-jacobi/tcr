@@ -43,6 +43,7 @@ pub enum NodeKind {
     Nop,
     Assign,
     Return,
+    Func(String),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -89,10 +90,6 @@ impl Parser {
 
     fn consume(&mut self) {
         self.curr = self.next_token();
-    }
-    #[allow(dead_code)]
-    pub(crate) fn init(&mut self) {
-        self.consume()
     }
 
     pub fn run(&mut self) -> Result<Vec<Box<Node>>, &'static str> {
@@ -382,6 +379,14 @@ impl Parser {
                 }
                 TokenKind::Ident(name) => {
                     self.consume();
+                    // function call
+                    if self.consume_token(TokenKind::OpenParen) {
+                        if self.consume_token(TokenKind::CloseParen) {
+                            return Ok(Box::new(Node::new_leaf(NodeKind::Func(name))));
+                        } else {
+                            return Err("expected close parenthesis");
+                        }
+                    }
                     if let Some(offset) = self.find_lval(&name) {
                         return Ok(Box::new(Node::new_leaf(NodeKind::LVAL(offset))));
                     }
@@ -431,4 +436,277 @@ impl Parser {
             }
         }
     }
+}
+
+//------------------------------------------------------------------------
+
+#[cfg(test)]
+#[test]
+fn add_test() {
+    let code = String::from("42 + 31");
+    let mut parser = Parser::load(code);
+    parser.consume();
+    // root for an ast
+    let root = parser.parse_expr().unwrap();
+    assert_eq!(root.kind, NodeKind::ADD);
+    assert_eq!(root.lhs.unwrap().kind, NodeKind::NUM(42));
+    assert_eq!(root.rhs.unwrap().kind, NodeKind::NUM(31));
+}
+
+#[test]
+fn single_test() {
+    let code = String::from("42");
+    let mut parser = Parser::load(code);
+    parser.consume();
+    // root for an ast
+    let root = parser.parse_expr().unwrap();
+    assert_eq!(root.kind, NodeKind::NUM(42));
+}
+
+#[test]
+fn mul_test() {
+    let code = String::from("42*31");
+    let mut parser = Parser::load(code);
+    parser.consume();
+    // root for an ast
+    let root = parser.parse_expr().unwrap();
+    assert_eq!(root.kind, NodeKind::MUL);
+    assert_eq!(root.lhs.unwrap().kind, NodeKind::NUM(42));
+    assert_eq!(root.rhs.unwrap().kind, NodeKind::NUM(31));
+}
+
+#[test]
+fn addmul_test() {
+    let code = String::from("42 + 31 * 1");
+    let mut parser = Parser::load(code);
+    parser.consume();
+    // root for an ast
+    let root = parser.parse_expr().unwrap();
+    let lhs = root.lhs.unwrap();
+    let rhs = root.rhs.unwrap();
+    assert_eq!(root.kind, NodeKind::ADD);
+    assert_eq!(rhs.kind, NodeKind::MUL);
+    assert_eq!(lhs.kind, NodeKind::NUM(42));
+    assert_eq!(rhs.lhs.unwrap().kind, NodeKind::NUM(31));
+    assert_eq!(rhs.rhs.unwrap().kind, NodeKind::NUM(1));
+}
+
+#[test]
+fn bracket_test() {
+    let code = String::from("42 * (31 + 1)");
+    let mut parser = Parser::load(code);
+    parser.consume();
+    // root for an ast
+    let root = parser.parse_expr().unwrap();
+    let lhs = root.lhs.unwrap();
+    let rhs = root.rhs.unwrap();
+    assert_eq!(root.kind, NodeKind::MUL);
+    assert_eq!(rhs.kind, NodeKind::ADD);
+    assert_eq!(lhs.kind, NodeKind::NUM(42));
+    assert_eq!(rhs.lhs.unwrap().kind, NodeKind::NUM(31));
+    assert_eq!(rhs.rhs.unwrap().kind, NodeKind::NUM(1));
+}
+
+#[test]
+fn unary_test() {
+    let code = String::from("-42 * +31");
+    let mut parser = Parser::load(code);
+    parser.consume();
+    // root for an ast
+    let root = parser.parse_expr().unwrap();
+    let lhs = root.lhs.unwrap();
+    let rhs = root.rhs.unwrap();
+    assert_eq!(root.kind, NodeKind::MUL);
+    assert_eq!(lhs.kind, NodeKind::SUB);
+    assert_eq!(rhs.kind, NodeKind::ADD);
+    assert_eq!(lhs.lhs.unwrap().kind, NodeKind::NUM(0));
+    assert_eq!(lhs.rhs.unwrap().kind, NodeKind::NUM(42));
+    assert_eq!(rhs.lhs.unwrap().kind, NodeKind::NUM(0));
+    assert_eq!(rhs.rhs.unwrap().kind, NodeKind::NUM(31));
+}
+
+#[test]
+fn simple_relation_test() {
+    let code = String::from("42  >=   31 ");
+    let mut parser = Parser::load(code);
+    parser.consume();
+    let root = parser.parse_expr().unwrap();
+    assert_eq!(root.kind, NodeKind::Leq);
+    assert_eq!(root.rhs.unwrap().kind, NodeKind::NUM(42));
+    assert_eq!(root.lhs.unwrap().kind, NodeKind::NUM(31));
+}
+
+#[test]
+fn two_relation_test() {
+    let code = String::from("42 * 31 >=   31 + 42");
+    let mut parser = Parser::load(code);
+    parser.consume();
+    let root = parser.parse_expr().unwrap();
+    let lhs = root.lhs.unwrap();
+    let rhs = root.rhs.unwrap();
+    assert_eq!(root.kind, NodeKind::Leq);
+    assert_eq!(lhs.kind, NodeKind::ADD);
+    assert_eq!(rhs.kind, NodeKind::MUL);
+    assert_eq!(lhs.lhs.unwrap().kind, NodeKind::NUM(31));
+    assert_eq!(lhs.rhs.unwrap().kind, NodeKind::NUM(42));
+    assert_eq!(rhs.lhs.unwrap().kind, NodeKind::NUM(42));
+    assert_eq!(rhs.rhs.unwrap().kind, NodeKind::NUM(31));
+}
+
+#[test]
+fn program_test() {
+    let code = "a = 42; b = 31;".to_string();
+    let mut parser = Parser::load(code);
+    let stmts = parser.run().unwrap();
+    assert_eq!(stmts.len(), 2);
+    let first = stmts[0].clone();
+    let second = stmts[1].clone();
+    assert_eq!(first.kind, NodeKind::Assign);
+    assert_eq!(first.lhs.unwrap().kind, NodeKind::LVAL(8));
+    assert_eq!(first.rhs.unwrap().kind, NodeKind::NUM(42));
+    assert_eq!(second.kind, NodeKind::Assign);
+    assert_eq!(second.lhs.unwrap().kind, NodeKind::LVAL(16));
+    assert_eq!(second.rhs.unwrap().kind, NodeKind::NUM(31));
+}
+
+#[test]
+fn assign_test() {
+    let code = "a = 42; b = 31; a = 31;".to_string();
+    let mut parser = Parser::load(code);
+    let stmts = parser.run().unwrap();
+    assert_eq!(stmts.len(), 3);
+    let first = stmts[0].clone();
+    let second = stmts[1].clone();
+    let third = stmts[2].clone();
+    assert_eq!(first.kind, NodeKind::Assign);
+    assert_eq!(first.lhs.unwrap().kind, NodeKind::LVAL(8));
+    assert_eq!(first.rhs.unwrap().kind, NodeKind::NUM(42));
+    assert_eq!(second.kind, NodeKind::Assign);
+    assert_eq!(second.lhs.unwrap().kind, NodeKind::LVAL(16));
+    assert_eq!(second.rhs.unwrap().kind, NodeKind::NUM(31));
+    assert_eq!(third.kind, NodeKind::Assign);
+    assert_eq!(third.lhs.unwrap().kind, NodeKind::LVAL(8));
+    assert_eq!(third.rhs.unwrap().kind, NodeKind::NUM(31));
+}
+
+#[test]
+fn return_test() {
+    let code = String::from("return 42;");
+    let mut parser = Parser::load(code);
+    parser.consume();
+    let root = parser.parse_stmt().unwrap();
+    assert_eq!(root.kind, NodeKind::Return);
+    assert_eq!(root.rhs.unwrap().kind, NodeKind::NUM(42));
+}
+
+#[test]
+fn if_sinple_test() {
+    let code = String::from("if (42) return 42;");
+    let mut parser = Parser::load(code);
+    let stmts = parser.run().unwrap();
+    assert_eq!(stmts.len(), 1);
+    let stmt = stmts[0].clone();
+    if let NodeKind::If(expr) = stmt.kind {
+        assert_eq!(expr.kind, NodeKind::NUM(42));
+    } else {
+        panic!("expected if statement");
+    }
+    let lhs = stmt.lhs.unwrap();
+    let rhs = stmt.rhs;
+    assert_eq!(lhs.kind, NodeKind::Return);
+    assert_eq!(rhs, None);
+}
+#[test]
+fn if_else_test() {
+    let code = String::from("if (42) return 42; else return 31;");
+    let mut parser = Parser::load(code);
+    let stmts = parser.run().unwrap();
+    assert_eq!(stmts.len(), 1);
+    let stmt = stmts[0].clone();
+    if let NodeKind::If(expr) = stmt.kind {
+        assert_eq!(expr.kind, NodeKind::NUM(42));
+    } else {
+        panic!("expected if statement");
+    }
+    let lhs = stmt.lhs.unwrap();
+    let rhs = stmt.rhs.unwrap();
+    assert_eq!(lhs.kind, NodeKind::Return);
+    assert_eq!(rhs.kind, NodeKind::Return);
+}
+
+#[test]
+fn for_test() {
+    let code = String::from("for(a=2; a <= 4; a = a + 1) ;");
+    let mut parser = Parser::load(code);
+    let stmts = parser.run().unwrap();
+    assert_eq!(stmts.len(), 1);
+    let stmt = stmts[0].clone();
+    if let NodeKind::For { init, end, inc } = stmt.kind {
+        assert_eq!(init.kind, NodeKind::Assign);
+        assert_eq!(end.kind, NodeKind::Leq);
+        assert_eq!(inc.kind, NodeKind::Assign);
+    } else {
+        panic!("expected statement");
+    }
+    let lhs = stmt.lhs.unwrap();
+    assert_eq!(lhs.kind, NodeKind::Nop);
+}
+#[test]
+fn while_test() {
+    let code = String::from("while(42) ;");
+    let mut parser = Parser::load(code);
+    let stmts = parser.run().unwrap();
+    assert_eq!(stmts.len(), 1);
+    let node = stmts[0].clone();
+    let lhs = node.lhs.unwrap();
+    let rhs = node.rhs.unwrap();
+    assert_eq!(node.kind, NodeKind::While);
+    assert_eq!(lhs.kind, NodeKind::NUM(42));
+    assert_eq!(rhs.kind, NodeKind::Nop);
+}
+
+#[test]
+fn block_test() {
+    let code = String::from("{42; 31;}");
+    let mut parser = Parser::load(code);
+    let stmts = parser.run().unwrap();
+    assert_eq!(stmts.len(), 1);
+    let node = stmts[0].clone();
+    if let NodeKind::Block(block) = node.kind {
+        assert_eq!(block.len(), 2);
+        let first = block[0].clone();
+        let second = block[1].clone();
+        assert_eq!(first.kind, NodeKind::NUM(42));
+        assert_eq!(second.kind, NodeKind::NUM(31));
+    } else {
+        panic!("expected block");
+    }
+}
+#[test]
+fn if_block_test() {
+    let code = String::from("if (a > 1) {42;}");
+    let mut parser = Parser::load(code);
+    let stmts = parser.run().unwrap();
+    assert_eq!(stmts.len(), 1);
+    let node = stmts[0].clone();
+    if let NodeKind::If(_) = node.kind {
+        let block = node.lhs.unwrap();
+        if let NodeKind::Block(stmt) = block.kind {
+            assert_eq!(stmt.len(), 1);
+        } else {
+            panic!("expected block");
+        }
+    } else {
+        panic!("expected if statement");
+    }
+}
+
+#[test]
+fn func_test() {
+    let code = String::from("foo();");
+    let mut parser = Parser::load(code);
+    let stmts = parser.run().unwrap();
+    assert_eq!(stmts.len(), 1);
+    let node = stmts[0].clone();
+    assert_eq!(node.kind, NodeKind::Func("foo".to_string()));
 }

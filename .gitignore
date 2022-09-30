@@ -21,3 +21,6 @@ Cargo.lock
 *.sh
 
 bin/
+example/
+*.o
+*.c

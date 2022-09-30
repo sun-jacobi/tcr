@@ -29,6 +29,11 @@ impl Rcc {
             println!("  nop");
             return Ok(());
         }
+        if let NodeKind::Func(name) = node.kind {
+            println!("  call _{}", name);
+            println!("  push rax");
+            return Ok(());
+        }
 
         if let NodeKind::Block(stmts) = node.kind {
             for stmt in stmts {
