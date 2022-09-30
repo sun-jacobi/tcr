@@ -5,6 +5,9 @@ pub struct Rcc {
     parser: Parser,
     mangle: u8,
 }
+
+const ARG_REGISTER: [&'static str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+
 impl Rcc {
     pub fn init(src: String) -> Self {
         let parser = Parser::load(src);
@@ -29,7 +32,13 @@ impl Rcc {
             println!("  nop");
             return Ok(());
         }
-        if let NodeKind::Func(name) = node.kind {
+
+        if let NodeKind::Func { name, argv } = node.kind {
+            for (index, arg) in argv.into_iter().enumerate() {
+                self.gen(arg)?;
+                println!("  pop rax");
+                println!("  mov {}, rax", ARG_REGISTER[index]);
+            }
             println!("  call _{}", name);
             println!("  push rax");
             return Ok(());
@@ -124,10 +133,10 @@ impl Rcc {
                     NodeKind::LVAL(offset) => {
                         Self::addr(offset);
                         self.gen(node.rhs.unwrap())?;
-                        println!("  pop rdi");
+                        println!("  pop rdx");
                         println!("  pop rax");
-                        println!("  mov [rax], rdi");
-                        println!("  push rdi");
+                        println!("  mov [rax], rdx");
+                        println!("  push rdx");
                         return Ok(());
                     }
                     _ => return Err("expected lvalue"),
@@ -149,33 +158,33 @@ impl Rcc {
             return Ok(());
         }
 
-        println!("  pop rdi");
+        println!("  pop rdx");
         println!("  pop rax");
         match node.kind {
-            NodeKind::ADD => println!("  add rax, rdi"),
-            NodeKind::SUB => println!("  sub rax, rdi"),
-            NodeKind::MUL => println!("  imul rax, rdi"),
+            NodeKind::ADD => println!("  add rax, rdx"),
+            NodeKind::SUB => println!("  sub rax, rdx"),
+            NodeKind::MUL => println!("  imul rax, rdx"),
             NodeKind::DIV => {
                 println!("  cqo");
-                println!("  idiv rdi");
+                println!("  idiv rdx");
             }
             NodeKind::Eq => {
-                println!("  cmp rax, rdi");
+                println!("  cmp rax, rdx");
                 println!("  sete al");
                 println!("  movzx rax, al")
             }
             NodeKind::NotEq => {
-                println!("  cmp rax, rdi");
+                println!("  cmp rax, rdx");
                 println!("  setne al");
                 println!("  movzx rax, al")
             }
             NodeKind::Lt => {
-                println!("  cmp rax, rdi");
+                println!("  cmp rax, rdx");
                 println!("  setl al");
                 println!("  movzx rax, al")
             }
             NodeKind::Leq => {
-                println!("  cmp rax, rdi");
+                println!("  cmp rax, rdx");
                 println!("  setle al");
                 println!("  movzx rax, al")
             }

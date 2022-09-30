@@ -43,7 +43,10 @@ pub enum NodeKind {
     Nop,
     Assign,
     Return,
-    Func(String),
+    Func {
+        name: String,
+        argv: Vec<Box<Node>>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -381,10 +384,19 @@ impl Parser {
                     self.consume();
                     // function call
                     if self.consume_token(TokenKind::OpenParen) {
+                        let mut argv = Vec::new();
                         if self.consume_token(TokenKind::CloseParen) {
-                            return Ok(Box::new(Node::new_leaf(NodeKind::Func(name))));
-                        } else {
-                            return Err("expected close parenthesis");
+                            return Ok(Box::new(Node::new_leaf(NodeKind::Func { name, argv })));
+                        }
+                        loop {
+                            let arg = self.parse_expr()?;
+                            argv.push(arg);
+                            if self.consume_token(TokenKind::CloseParen) {
+                                return Ok(Box::new(Node::new_leaf(NodeKind::Func { name, argv })));
+                            }
+                            if self.consume_token(TokenKind::Comma) {
+                                continue;
+                            }
                         }
                     }
                     if let Some(offset) = self.find_lval(&name) {
@@ -438,6 +450,7 @@ impl Parser {
     }
 }
 
+//------------------------------------------------------------------------
 //------------------------------------------------------------------------
 
 #[cfg(test)]
@@ -708,5 +721,27 @@ fn func_test() {
     let stmts = parser.run().unwrap();
     assert_eq!(stmts.len(), 1);
     let node = stmts[0].clone();
-    assert_eq!(node.kind, NodeKind::Func("foo".to_string()));
+    if let NodeKind::Func { name, argv } = node.kind {
+        assert_eq!(name, "foo");
+        assert_eq!(argv.len(), 0);
+    } else {
+        panic!("expecten function call");
+    }
+}
+
+#[test]
+fn func_mul_test() {
+    let code = String::from("foo(42, 31);");
+    let mut parser = Parser::load(code);
+    let stmts = parser.run().unwrap();
+    assert_eq!(stmts.len(), 1);
+    let node = stmts[0].clone();
+    if let NodeKind::Func { name, argv } = node.kind {
+        assert_eq!(name, "foo");
+        assert_eq!(argv.len(), 2);
+        assert_eq!(argv[0].kind, NodeKind::NUM(42));
+        assert_eq!(argv[1].kind, NodeKind::NUM(31));
+    } else {
+        panic!("expecten function call");
+    }
 }
