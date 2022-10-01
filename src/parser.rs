@@ -14,6 +14,7 @@ struct LVal {
     offset: u8,
 }
 
+
 impl LVal {
     fn new(name: String, offset: u8) -> Self {
         Self { name, offset }
@@ -46,6 +47,11 @@ pub enum NodeKind {
     Func {
         name: String,
         argv: Vec<Box<Node>>,
+    },
+    Def {
+        name: String,
+        argv: Vec<String>,
+        body: Box<Node>,
     },
 }
 
@@ -106,8 +112,57 @@ impl Parser {
             if let None = self.curr {
                 return Ok(code);
             }
-            let stmt = self.parse_stmt()?;
-            code.push(stmt);
+            let function = self.parse_def()?;
+            code.push(function);
+        }
+    }
+
+    pub fn parse_def(&mut self) -> Result<Box<Node>, &'static str> {
+        match &self.curr {
+            None => return Err("no new token"),
+            Some(token) => match token.kind.to_owned() {
+                TokenKind::Ident(name) => {
+                    self.consume();
+                    if !self.consume_token(TokenKind::OpenParen) {
+                        return Err("expected open parenthesis.");
+                    }
+                    let mut argv = Vec::new();
+                    if self.consume_token(TokenKind::CloseParen) {
+                        if !self.peek_token(TokenKind::OpenCur) {
+                            return Err("expected function body.");
+                        }
+                        let body = self.parse_stmt()?;
+                        return Ok(Box::new(Node::new_leaf(NodeKind::Def { name, argv, body })));
+                    }
+                    loop {
+                        match &self.curr {
+                            None => return Err("no new token"),
+                            Some(token) => match token.kind.to_owned() {
+                                TokenKind::Ident(arg) => {
+                                    self.consume();
+                                    argv.push(arg);
+                                    if self.consume_token(TokenKind::CloseParen) {
+                                        if !self.peek_token(TokenKind::OpenCur) {
+                                            return Err("expected function body.");
+                                        }
+                                        let body = self.parse_stmt()?;
+                                        return Ok(Box::new(Node::new_leaf(NodeKind::Def {
+                                            name,
+                                            argv,
+                                            body,
+                                        })));
+                                    }
+                                    if self.consume_token(TokenKind::Comma) {
+                                        continue;
+                                    }
+                                }
+                                _ => return Err("unexpected token"),
+                            },
+                        }
+                    }
+                }
+                _ => return Err("expected function name"),
+            },
         }
     }
 
@@ -567,39 +622,49 @@ fn two_relation_test() {
 }
 
 #[test]
-fn program_test() {
-    let code = "a = 42; b = 31;".to_string();
+fn stmt_test() {
+    let code = "{a = 42; b = 31;}".to_string();
     let mut parser = Parser::load(code);
-    let stmts = parser.run().unwrap();
-    assert_eq!(stmts.len(), 2);
-    let first = stmts[0].clone();
-    let second = stmts[1].clone();
-    assert_eq!(first.kind, NodeKind::Assign);
-    assert_eq!(first.lhs.unwrap().kind, NodeKind::LVAL(8));
-    assert_eq!(first.rhs.unwrap().kind, NodeKind::NUM(42));
-    assert_eq!(second.kind, NodeKind::Assign);
-    assert_eq!(second.lhs.unwrap().kind, NodeKind::LVAL(16));
-    assert_eq!(second.rhs.unwrap().kind, NodeKind::NUM(31));
+    parser.consume();
+    let node = parser.parse_stmt().unwrap();
+    if let NodeKind::Block(stmts) = node.kind {
+        assert_eq!(stmts.len(), 2);
+        let first = stmts[0].clone();
+        let second = stmts[1].clone();
+        assert_eq!(first.kind, NodeKind::Assign);
+        assert_eq!(first.lhs.unwrap().kind, NodeKind::LVAL(8));
+        assert_eq!(first.rhs.unwrap().kind, NodeKind::NUM(42));
+        assert_eq!(second.kind, NodeKind::Assign);
+        assert_eq!(second.lhs.unwrap().kind, NodeKind::LVAL(16));
+        assert_eq!(second.rhs.unwrap().kind, NodeKind::NUM(31));
+    } else {
+        panic!("expect block statement");
+    }
 }
 
 #[test]
 fn assign_test() {
-    let code = "a = 42; b = 31; a = 31;".to_string();
+    let code = "{a = 42; b = 31; a = 31;}".to_string();
     let mut parser = Parser::load(code);
-    let stmts = parser.run().unwrap();
-    assert_eq!(stmts.len(), 3);
-    let first = stmts[0].clone();
-    let second = stmts[1].clone();
-    let third = stmts[2].clone();
-    assert_eq!(first.kind, NodeKind::Assign);
-    assert_eq!(first.lhs.unwrap().kind, NodeKind::LVAL(8));
-    assert_eq!(first.rhs.unwrap().kind, NodeKind::NUM(42));
-    assert_eq!(second.kind, NodeKind::Assign);
-    assert_eq!(second.lhs.unwrap().kind, NodeKind::LVAL(16));
-    assert_eq!(second.rhs.unwrap().kind, NodeKind::NUM(31));
-    assert_eq!(third.kind, NodeKind::Assign);
-    assert_eq!(third.lhs.unwrap().kind, NodeKind::LVAL(8));
-    assert_eq!(third.rhs.unwrap().kind, NodeKind::NUM(31));
+    parser.consume();
+    let node = parser.parse_stmt().unwrap();
+    if let NodeKind::Block(stmts) = node.kind {
+        assert_eq!(stmts.len(), 3);
+        let first = stmts[0].clone();
+        let second = stmts[1].clone();
+        let third = stmts[2].clone();
+        assert_eq!(first.kind, NodeKind::Assign);
+        assert_eq!(first.lhs.unwrap().kind, NodeKind::LVAL(8));
+        assert_eq!(first.rhs.unwrap().kind, NodeKind::NUM(42));
+        assert_eq!(second.kind, NodeKind::Assign);
+        assert_eq!(second.lhs.unwrap().kind, NodeKind::LVAL(16));
+        assert_eq!(second.rhs.unwrap().kind, NodeKind::NUM(31));
+        assert_eq!(third.kind, NodeKind::Assign);
+        assert_eq!(third.lhs.unwrap().kind, NodeKind::LVAL(8));
+        assert_eq!(third.rhs.unwrap().kind, NodeKind::NUM(31));
+    } else {
+        panic!("expect block statement");
+    }
 }
 
 #[test]
@@ -613,12 +678,11 @@ fn return_test() {
 }
 
 #[test]
-fn if_sinple_test() {
+fn if_simple_test() {
     let code = String::from("if (42) return 42;");
     let mut parser = Parser::load(code);
-    let stmts = parser.run().unwrap();
-    assert_eq!(stmts.len(), 1);
-    let stmt = stmts[0].clone();
+    parser.consume();
+    let stmt = parser.parse_stmt().unwrap();
     if let NodeKind::If(expr) = stmt.kind {
         assert_eq!(expr.kind, NodeKind::NUM(42));
     } else {
@@ -633,9 +697,8 @@ fn if_sinple_test() {
 fn if_else_test() {
     let code = String::from("if (42) return 42; else return 31;");
     let mut parser = Parser::load(code);
-    let stmts = parser.run().unwrap();
-    assert_eq!(stmts.len(), 1);
-    let stmt = stmts[0].clone();
+    parser.consume();
+    let stmt = parser.parse_stmt().unwrap();
     if let NodeKind::If(expr) = stmt.kind {
         assert_eq!(expr.kind, NodeKind::NUM(42));
     } else {
@@ -651,9 +714,8 @@ fn if_else_test() {
 fn for_test() {
     let code = String::from("for(a=2; a <= 4; a = a + 1) ;");
     let mut parser = Parser::load(code);
-    let stmts = parser.run().unwrap();
-    assert_eq!(stmts.len(), 1);
-    let stmt = stmts[0].clone();
+    parser.consume();
+    let stmt = parser.parse_stmt().unwrap();
     if let NodeKind::For { init, end, inc } = stmt.kind {
         assert_eq!(init.kind, NodeKind::Assign);
         assert_eq!(end.kind, NodeKind::Leq);
@@ -668,9 +730,8 @@ fn for_test() {
 fn while_test() {
     let code = String::from("while(42) ;");
     let mut parser = Parser::load(code);
-    let stmts = parser.run().unwrap();
-    assert_eq!(stmts.len(), 1);
-    let node = stmts[0].clone();
+    parser.consume();
+    let node = parser.parse_stmt().unwrap();
     let lhs = node.lhs.unwrap();
     let rhs = node.rhs.unwrap();
     assert_eq!(node.kind, NodeKind::While);
@@ -682,9 +743,8 @@ fn while_test() {
 fn block_test() {
     let code = String::from("{42; 31;}");
     let mut parser = Parser::load(code);
-    let stmts = parser.run().unwrap();
-    assert_eq!(stmts.len(), 1);
-    let node = stmts[0].clone();
+    parser.consume();
+    let node = parser.parse_stmt().unwrap();
     if let NodeKind::Block(block) = node.kind {
         assert_eq!(block.len(), 2);
         let first = block[0].clone();
@@ -699,9 +759,8 @@ fn block_test() {
 fn if_block_test() {
     let code = String::from("if (a > 1) {42;}");
     let mut parser = Parser::load(code);
-    let stmts = parser.run().unwrap();
-    assert_eq!(stmts.len(), 1);
-    let node = stmts[0].clone();
+    parser.consume();
+    let node = parser.parse_stmt().unwrap();
     if let NodeKind::If(_) = node.kind {
         let block = node.lhs.unwrap();
         if let NodeKind::Block(stmt) = block.kind {
@@ -718,9 +777,8 @@ fn if_block_test() {
 fn func_test() {
     let code = String::from("foo();");
     let mut parser = Parser::load(code);
-    let stmts = parser.run().unwrap();
-    assert_eq!(stmts.len(), 1);
-    let node = stmts[0].clone();
+    parser.consume();
+    let node = parser.parse_stmt().unwrap();
     if let NodeKind::Func { name, argv } = node.kind {
         assert_eq!(name, "foo");
         assert_eq!(argv.len(), 0);
@@ -733,9 +791,8 @@ fn func_test() {
 fn func_mul_test() {
     let code = String::from("foo(42, 31);");
     let mut parser = Parser::load(code);
-    let stmts = parser.run().unwrap();
-    assert_eq!(stmts.len(), 1);
-    let node = stmts[0].clone();
+    parser.consume();
+    let node = parser.parse_stmt().unwrap();
     if let NodeKind::Func { name, argv } = node.kind {
         assert_eq!(name, "foo");
         assert_eq!(argv.len(), 2);
@@ -743,5 +800,29 @@ fn func_mul_test() {
         assert_eq!(argv[1].kind, NodeKind::NUM(31));
     } else {
         panic!("expecten function call");
+    }
+}
+
+#[test]
+fn def_test() {
+    let code = String::from("foo(a, b){return a + b;}");
+    let mut parser = Parser::load(code);
+    let functions = parser.run().unwrap();
+    assert_eq!(functions.len(), 1);
+    let foo = functions[0].clone();
+    if let NodeKind::Def { name, argv, body } = foo.kind {
+        assert_eq!(name, "foo");
+        assert_eq!(argv.len(), 2);
+        assert_eq!(argv[0], "a");
+        assert_eq!(argv[1], "b");
+        if let NodeKind::Block(stmts) = body.kind {
+            assert_eq!(stmts.len(), 1);
+            let stmt = stmts[0].clone();
+            assert_eq!(stmt.kind, NodeKind::Return);
+        } else {
+            panic!("expected function definition")
+        }
+    } else {
+        panic!("expected function definition")
     }
 }

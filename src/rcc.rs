@@ -202,11 +202,10 @@ impl Rcc {
         println!("_main:");
     }
 
-    
     // 16 bytes alignment
     fn align() {
         println!("  shr rsp, 4");
-        println!("  add rsp, 1");
+        println!("  sub rsp, 1");
         println!("  shl rsp, 4");
     }
 
