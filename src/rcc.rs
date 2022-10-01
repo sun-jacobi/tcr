@@ -39,6 +39,8 @@ impl Rcc {
                 println!("  pop rax");
                 println!("  mov {}, rax", ARG_REGISTER[index]);
             }
+
+            Rcc::align();
             println!("  call _{}", name);
             println!("  push rax");
             return Ok(());
@@ -133,10 +135,10 @@ impl Rcc {
                     NodeKind::LVAL(offset) => {
                         Self::addr(offset);
                         self.gen(node.rhs.unwrap())?;
-                        println!("  pop rdx");
+                        println!("  pop r10");
                         println!("  pop rax");
-                        println!("  mov [rax], rdx");
-                        println!("  push rdx");
+                        println!("  mov [rax], r10");
+                        println!("  push r10");
                         return Ok(());
                     }
                     _ => return Err("expected lvalue"),
@@ -158,33 +160,33 @@ impl Rcc {
             return Ok(());
         }
 
-        println!("  pop rdx");
+        println!("  pop r10");
         println!("  pop rax");
         match node.kind {
-            NodeKind::ADD => println!("  add rax, rdx"),
-            NodeKind::SUB => println!("  sub rax, rdx"),
-            NodeKind::MUL => println!("  imul rax, rdx"),
+            NodeKind::ADD => println!("  add rax, r10"),
+            NodeKind::SUB => println!("  sub rax, r10"),
+            NodeKind::MUL => println!("  imul rax, r10"),
             NodeKind::DIV => {
                 println!("  cqo");
-                println!("  idiv rdx");
+                println!("  idiv r10");
             }
             NodeKind::Eq => {
-                println!("  cmp rax, rdx");
+                println!("  cmp rax, r10");
                 println!("  sete al");
                 println!("  movzx rax, al")
             }
             NodeKind::NotEq => {
-                println!("  cmp rax, rdx");
+                println!("  cmp rax, r10");
                 println!("  setne al");
                 println!("  movzx rax, al")
             }
             NodeKind::Lt => {
-                println!("  cmp rax, rdx");
+                println!("  cmp rax, r10");
                 println!("  setl al");
                 println!("  movzx rax, al")
             }
             NodeKind::Leq => {
-                println!("  cmp rax, rdx");
+                println!("  cmp rax, r10");
                 println!("  setle al");
                 println!("  movzx rax, al")
             }
@@ -198,6 +200,14 @@ impl Rcc {
         println!(".intel_syntax noprefix");
         println!(".globl _main");
         println!("_main:");
+    }
+
+    
+    // 16 bytes alignment
+    fn align() {
+        println!("  shr rsp, 4");
+        println!("  add rsp, 1");
+        println!("  shl rsp, 4");
     }
 
     // rbp : base pointer
