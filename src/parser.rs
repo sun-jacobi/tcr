@@ -2,18 +2,17 @@ use crate::lexer::Lexer;
 use crate::lexer::Token;
 use crate::lexer::TokenKind;
 
-pub struct Parser {
+pub(crate) struct Parser {
     lexer: Lexer,
     curr: Option<Box<Token>>,
-    local: Vec<LVal>,
+    local: Vec<Vec<LVal>>, // local frames for functions
 }
 
 #[derive(Debug, PartialEq, Clone)]
-struct LVal {
+pub(crate) struct LVal {
     name: String,
     offset: u8,
 }
-
 
 impl LVal {
     fn new(name: String, offset: u8) -> Self {
@@ -22,7 +21,7 @@ impl LVal {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-pub enum NodeKind {
+pub(crate) enum NodeKind {
     NUM(i64),
     LVAL(u8),
     ADD,
@@ -47,16 +46,17 @@ pub enum NodeKind {
     Func {
         name: String,
         argv: Vec<Box<Node>>,
-    },
+    }, // function call
     Def {
         name: String,
-        argv: Vec<String>,
+        argv: Vec<LVal>,
         body: Box<Node>,
-    },
+        local: usize,
+    }, // function definition
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Node {
+pub(crate) struct Node {
     pub kind: NodeKind,
     pub lhs: Option<Box<Node>>,
     pub rhs: Option<Box<Node>>,
@@ -127,12 +127,19 @@ impl Parser {
                         return Err("expected open parenthesis.");
                     }
                     let mut argv = Vec::new();
+                    let local = self.local.len();
+                    self.local.push(Vec::new());
                     if self.consume_token(TokenKind::CloseParen) {
                         if !self.peek_token(TokenKind::OpenCur) {
                             return Err("expected function body.");
                         }
                         let body = self.parse_stmt()?;
-                        return Ok(Box::new(Node::new_leaf(NodeKind::Def { name, argv, body })));
+                        return Ok(Box::new(Node::new_leaf(NodeKind::Def {
+                            name,
+                            argv,
+                            body,
+                            local,
+                        })));
                     }
                     loop {
                         match &self.curr {
@@ -140,7 +147,8 @@ impl Parser {
                             Some(token) => match token.kind.to_owned() {
                                 TokenKind::Ident(arg) => {
                                     self.consume();
-                                    argv.push(arg);
+                                    let offset = self.push_local(self.local.len() - 1, arg.clone());
+                                    argv.push(LVal::new(arg, offset));
                                     if self.consume_token(TokenKind::CloseParen) {
                                         if !self.peek_token(TokenKind::OpenCur) {
                                             return Err("expected function body.");
@@ -150,6 +158,7 @@ impl Parser {
                                             name,
                                             argv,
                                             body,
+                                            local,
                                         })));
                                     }
                                     if self.consume_token(TokenKind::Comma) {
@@ -454,15 +463,17 @@ impl Parser {
                             }
                         }
                     }
+
                     if let Some(offset) = self.find_lval(&name) {
                         return Ok(Box::new(Node::new_leaf(NodeKind::LVAL(offset))));
                     }
-                    if let None = self.local.last() {
-                        self.local.push(LVal::new(name, 8));
+                    let cur_local = self.local.last_mut().unwrap();
+                    if let None = cur_local.last() {
+                        cur_local.push(LVal::new(name, 8));
                         return Ok(Box::new(Node::new_leaf(NodeKind::LVAL(8))));
                     }
-                    let offset = self.local.last().unwrap().offset + 8;
-                    self.local.push(LVal::new(name, offset));
+                    let offset = cur_local.last().unwrap().offset + 8;
+                    cur_local.push(LVal::new(name, offset));
                     Ok(Box::new(Node::new_leaf(NodeKind::LVAL(offset))))
                 }
                 _ => Err("unexpected token"),
@@ -475,7 +486,8 @@ impl Parser {
         self.lexer.next()
     }
     fn find_lval(&self, ident: &str) -> Option<u8> {
-        let lval = self.local.iter().find(|lval| lval.name == ident)?;
+        let cur_local = self.local.last().unwrap();
+        let lval = cur_local.iter().find(|lval| lval.name == ident)?;
         Some(lval.offset)
     }
 
@@ -503,12 +515,33 @@ impl Parser {
             }
         }
     }
+
+    pub fn get_local_size(&self, id: usize) -> usize {
+        self.local[id].len()
+    }
+
+    fn push_local(&mut self, id: usize, name: String) -> u8 {
+        if self.local[id].len() == 0 {
+            self.local[id].push(LVal::new(name, 8));
+            return 8;
+        } else {
+            let offset = self.local[id].last().unwrap().offset + 8;
+            self.local[id].push(LVal::new(name, offset));
+            return offset;
+        }
+    }
 }
 
 //------------------------------------------------------------------------
 //------------------------------------------------------------------------
 
 #[cfg(test)]
+impl Parser {
+    fn new_stack(&mut self) {
+        self.local.push(Vec::new());
+    }
+}
+
 #[test]
 fn add_test() {
     let code = String::from("42 + 31");
@@ -626,6 +659,7 @@ fn stmt_test() {
     let code = "{a = 42; b = 31;}".to_string();
     let mut parser = Parser::load(code);
     parser.consume();
+    parser.new_stack();
     let node = parser.parse_stmt().unwrap();
     if let NodeKind::Block(stmts) = node.kind {
         assert_eq!(stmts.len(), 2);
@@ -647,6 +681,7 @@ fn assign_test() {
     let code = "{a = 42; b = 31; a = 31;}".to_string();
     let mut parser = Parser::load(code);
     parser.consume();
+    parser.new_stack();
     let node = parser.parse_stmt().unwrap();
     if let NodeKind::Block(stmts) = node.kind {
         assert_eq!(stmts.len(), 3);
@@ -715,6 +750,7 @@ fn for_test() {
     let code = String::from("for(a=2; a <= 4; a = a + 1) ;");
     let mut parser = Parser::load(code);
     parser.consume();
+    parser.new_stack();
     let stmt = parser.parse_stmt().unwrap();
     if let NodeKind::For { init, end, inc } = stmt.kind {
         assert_eq!(init.kind, NodeKind::Assign);
@@ -731,6 +767,7 @@ fn while_test() {
     let code = String::from("while(42) ;");
     let mut parser = Parser::load(code);
     parser.consume();
+    parser.new_stack();
     let node = parser.parse_stmt().unwrap();
     let lhs = node.lhs.unwrap();
     let rhs = node.rhs.unwrap();
@@ -744,6 +781,7 @@ fn block_test() {
     let code = String::from("{42; 31;}");
     let mut parser = Parser::load(code);
     parser.consume();
+    parser.new_stack();
     let node = parser.parse_stmt().unwrap();
     if let NodeKind::Block(block) = node.kind {
         assert_eq!(block.len(), 2);
@@ -760,6 +798,7 @@ fn if_block_test() {
     let code = String::from("if (a > 1) {42;}");
     let mut parser = Parser::load(code);
     parser.consume();
+    parser.new_stack();
     let node = parser.parse_stmt().unwrap();
     if let NodeKind::If(_) = node.kind {
         let block = node.lhs.unwrap();
@@ -805,16 +844,24 @@ fn func_mul_test() {
 
 #[test]
 fn def_test() {
-    let code = String::from("foo(a, b){return a + b;}");
+    let code = String::from("foo(a, b, c){return a + b + c;}");
     let mut parser = Parser::load(code);
     let functions = parser.run().unwrap();
     assert_eq!(functions.len(), 1);
     let foo = functions[0].clone();
-    if let NodeKind::Def { name, argv, body } = foo.kind {
+    if let NodeKind::Def {
+        name,
+        argv,
+        body,
+        local,
+    } = foo.kind
+    {
         assert_eq!(name, "foo");
-        assert_eq!(argv.len(), 2);
-        assert_eq!(argv[0], "a");
-        assert_eq!(argv[1], "b");
+        assert_eq!(3, parser.local[0].len());
+        assert_eq!(argv.len(), 3);
+        assert_eq!(local, 0);
+        assert_eq!(argv[0].name, "a");
+        assert_eq!(argv[1].name, "b");
         if let NodeKind::Block(stmts) = body.kind {
             assert_eq!(stmts.len(), 1);
             let stmt = stmts[0].clone();

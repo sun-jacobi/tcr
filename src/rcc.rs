@@ -6,6 +6,7 @@ pub struct Rcc {
     mangle: u8,
 }
 
+// C ABI register
 const ARG_REGISTER: [&'static str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 
 impl Rcc {
@@ -21,6 +22,7 @@ impl Rcc {
         println!("  push rax");
     }
 
+    // get a new name-mangling
     fn pop_mangle(&mut self) -> String {
         let mangle = self.mangle;
         self.mangle += 1;
@@ -28,6 +30,28 @@ impl Rcc {
     }
 
     fn gen(&mut self, node: Box<Node>) -> Result<(), &'static str> {
+        if let NodeKind::Def {
+            name,
+            argv,
+            body,
+            local,
+        } = node.kind
+        {
+            println!("_{}:", name);
+            let offsets = self.parser.get_local_size(local);
+            self.prolog(offsets, argv.len());
+            if let NodeKind::Block(stmts) = body.kind {
+                for stmt in stmts {
+                    self.gen(stmt)?;
+                    println!("  pop rax");
+                }
+            } else {
+                return Err("expected function body");
+            }
+            Rcc::epilog();
+            return Ok(());
+        }
+
         if let NodeKind::Nop = node.kind {
             println!("  nop");
             return Ok(());
@@ -40,8 +64,9 @@ impl Rcc {
                 println!("  mov {}, rax", ARG_REGISTER[index]);
             }
 
-            Rcc::align();
+            println!("  sub rsp, 8"); // Sys-V
             println!("  call _{}", name);
+            println!("  add rsp, 8"); // Sys-V
             println!("  push rax");
             return Ok(());
         }
@@ -95,7 +120,7 @@ impl Rcc {
                 // if-else
                 Some(rhs) => {
                     let else_mangle = self.pop_mangle();
-                    println!(" je {}", else_mangle);
+                    println!("  je {}", else_mangle);
                     self.gen(node.lhs.unwrap())?;
                     let end_mangle = self.pop_mangle();
                     println!("  jmp {}", end_mangle);
@@ -199,27 +224,22 @@ impl Rcc {
     fn prefix() {
         println!(".intel_syntax noprefix");
         println!(".globl _main");
-        println!("_main:");
-    }
-
-    // 16 bytes alignment
-    fn align() {
-        println!("  shr rsp, 4");
-        println!("  sub rsp, 1");
-        println!("  shl rsp, 4");
+        //println!("_main:");
     }
 
     // rbp : base pointer
     // rsp : stack pointer
-    fn prolog() {
+    fn prolog(&self, offsets: usize, args: usize) {
         println!("  push rbp");
         println!("  mov rbp, rsp");
-        println!("  sub rsp, 208");
+        println!("  sub rsp, {}", offsets * 8);
+        for arg in 0..args {
+            println!("  mov [rbp-{}], {}", (arg + 1) * 8, ARG_REGISTER[arg]);
+        }
     }
 
     fn epilog() {
-        println!("  mov rsp, rbp");
-        println!("  pop rbp");
+        println!("  leave");
         println!("  ret");
     }
 
@@ -229,14 +249,13 @@ impl Rcc {
         let program = rcc.parser.run()?;
 
         Rcc::prefix();
-        Rcc::prolog();
+        //Rcc::prolog();
 
-        for stmt in program {
-            rcc.gen(stmt)?;
-            println!("  pop rax");
+        for func in program {
+            rcc.gen(func)?;
         }
 
-        Rcc::epilog();
+        //Rcc::epilog();
         Ok(())
     }
 }
