@@ -29,7 +29,21 @@ impl Rcc {
         format!(".L{}", mangle)
     }
 
-    fn gen(&mut self, node: Box<Node>) -> Result<(), &'static str> {
+    fn gen(&mut self, node: Box<Node>) -> Result<(), String> {
+        if let NodeKind::Declar = node.kind {
+            let lhs = node.lhs.unwrap();
+            if let NodeKind::LVAL(offset) = lhs.kind {
+                Self::addr(offset);
+                println!("  push 0");
+                println!("  pop r10");
+                println!("  pop rax");
+                println!("  mov [rax], r10");
+                println!("  push r10");
+                return Ok(());
+            } else {
+                return Err(String::from("expected lval"));
+            }
+        }
         // *lval
         if let NodeKind::Deref = node.kind {
             if let Some(rhs) = &node.rhs {
@@ -41,10 +55,10 @@ impl Rcc {
                     println!("  push rax");
                     return Ok(());
                 } else {
-                    return Err("expected lvalue.");
+                    return Err("expected lvalue.".to_string());
                 }
             } else {
-                return Err("expected expression.");
+                return Err("expected expression.".to_string());
             }
         }
 
@@ -55,10 +69,10 @@ impl Rcc {
                     Self::addr(offset);
                     return Ok(());
                 } else {
-                    return Err("expected lvalue.");
+                    return Err("expected lvalue.".to_string());
                 }
             } else {
-                return Err("expected expression.");
+                return Err("expected expression.".to_string());
             }
         }
 
@@ -78,7 +92,7 @@ impl Rcc {
                     println!("  pop rax");
                 }
             } else {
-                return Err("expected function body");
+                return Err("expected function body".to_string());
             }
             Rcc::epilog();
             return Ok(());
@@ -187,7 +201,7 @@ impl Rcc {
         // assign the right value to lvalue
         if let NodeKind::Assign = node.kind {
             match &node.lhs {
-                None => return Err("expected lvalue"),
+                None => return Err("expected lvalue".to_string()),
                 Some(lhs) => match lhs.kind {
                     NodeKind::LVAL(offset) => {
                         Self::addr(offset);
@@ -198,7 +212,7 @@ impl Rcc {
                         println!("  push r10");
                         return Ok(());
                     }
-                    _ => return Err("expected lvalue"),
+                    _ => return Err("expected lvalue".to_string()),
                 },
             }
         }
@@ -247,7 +261,7 @@ impl Rcc {
                 println!("  setle al");
                 println!("  movzx rax, al")
             }
-            _ => return Err("not expected node"),
+            _ => return Err("not expected node".to_string()),
         }
         println!("  push rax");
         Ok(())
@@ -275,7 +289,7 @@ impl Rcc {
         println!("  ret");
     }
 
-    pub fn run() -> Result<(), &'static str> {
+    pub fn run() -> Result<(), String> {
         let src = args().nth(1).expect("Wrong argument number");
         let mut rcc = Rcc::init(src);
         let program = rcc.parser.run()?;

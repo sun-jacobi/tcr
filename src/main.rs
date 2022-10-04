@@ -2,7 +2,7 @@ mod lexer;
 mod parser;
 mod rcc;
 
-fn main() -> Result<(), &'static str> {
+fn main() -> Result<(), String> {
     rcc::Rcc::run()?;
     Ok(())
 }

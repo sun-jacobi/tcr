@@ -53,8 +53,9 @@ pub(crate) enum NodeKind {
         name: String,
         argv: Vec<LVal>,
         body: Box<Node>,
-        local: usize,
+        local: usize, // index in the local frames
     }, // function definition
+    Declar, // define new variable
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -103,12 +104,12 @@ impl Parser {
         self.curr = self.next_token();
     }
 
-    pub fn run(&mut self) -> Result<Vec<Box<Node>>, &'static str> {
+    pub fn run(&mut self) -> Result<Vec<Box<Node>>, String> {
         self.consume();
         self.parse_program()
     }
 
-    fn parse_program(&mut self) -> Result<Vec<Box<Node>>, &'static str> {
+    fn parse_program(&mut self) -> Result<Vec<Box<Node>>, String> {
         let mut code = Vec::new();
         loop {
             if let None = self.curr {
@@ -119,21 +120,21 @@ impl Parser {
         }
     }
 
-    pub fn parse_def(&mut self) -> Result<Box<Node>, &'static str> {
+    pub fn parse_def(&mut self) -> Result<Box<Node>, String> {
         match &self.curr {
-            None => return Err("no new token"),
+            None => return Err("no new token".to_string()),
             Some(token) => match token.kind.to_owned() {
                 TokenKind::Ident(name) => {
                     self.consume();
                     if !self.consume_token(TokenKind::OpenParen) {
-                        return Err("expected open parenthesis.");
+                        return Err("expected open parenthesis.".to_string());
                     }
                     let mut argv = Vec::new();
                     let local = self.local.len();
                     self.local.push(Vec::new());
                     if self.consume_token(TokenKind::CloseParen) {
                         if !self.peek_token(TokenKind::OpenCur) {
-                            return Err("expected function body.");
+                            return Err("expected function body.".to_string());
                         }
                         let body = self.parse_stmt()?;
                         return Ok(Box::new(Node::new_leaf(NodeKind::Def {
@@ -145,15 +146,15 @@ impl Parser {
                     }
                     loop {
                         match &self.curr {
-                            None => return Err("no new token"),
+                            None => return Err("no new token".to_string()),
                             Some(token) => match token.kind.to_owned() {
                                 TokenKind::Ident(arg) => {
                                     self.consume();
-                                    let offset = self.push_local(self.local.len() - 1, arg.clone());
+                                    let offset = self.push_local(arg.clone());
                                     argv.push(LVal::new(arg, offset));
                                     if self.consume_token(TokenKind::CloseParen) {
                                         if !self.peek_token(TokenKind::OpenCur) {
-                                            return Err("expected function body.");
+                                            return Err("expected function body.".to_string());
                                         }
                                         let body = self.parse_stmt()?;
                                         return Ok(Box::new(Node::new_leaf(NodeKind::Def {
@@ -167,17 +168,40 @@ impl Parser {
                                         continue;
                                     }
                                 }
-                                _ => return Err("unexpected token"),
+                                _ => return Err("unexpected token".to_string()),
                             },
                         }
                     }
                 }
-                _ => return Err("expected function name"),
+                _ => return Err("expected function name".to_string()),
             },
         }
     }
 
-    pub fn parse_stmt(&mut self) -> Result<Box<Node>, &'static str> {
+    pub fn parse_stmt(&mut self) -> Result<Box<Node>, String> {
+        // def new lval
+        if self.consume_token(TokenKind::Int) {
+            match &self.curr {
+                None => return Err("expected variable name".to_string()),
+                Some(token) => match token.kind.to_owned() {
+                    TokenKind::Ident(name) => {
+                        self.consume();
+                        let offset = self.push_local(name.clone());
+                        if self.consume_token(TokenKind::SemiCol) {
+                            return Ok(Box::new(Node {
+                                kind: NodeKind::Declar,
+                                lhs: Some(Box::new(Node::new_leaf(NodeKind::LVAL(offset)))),
+                                rhs: None,
+                            }));
+                        } else {
+                            return Err("TODO".to_string());
+                        }
+                    }
+                    _ => return Err("expected variable name".to_string()),
+                },
+            }
+        }
+
         // nop
         if self.consume_token(TokenKind::SemiCol) {
             return Ok(Box::new(Node::new_leaf(NodeKind::Nop)));
@@ -188,7 +212,7 @@ impl Parser {
             let mut stmts = Vec::new();
             loop {
                 match &self.curr {
-                    None => return Err("no new token"),
+                    None => return Err("no new token".to_string()),
                     Some(token) => match token.kind {
                         TokenKind::CloseCur => {
                             self.consume();
@@ -202,11 +226,11 @@ impl Parser {
         // if else
         if self.consume_token(TokenKind::If) {
             if !self.consume_token(TokenKind::OpenParen) {
-                return Err("expected open parenthesis");
+                return Err("expected open parenthesis".to_string());
             }
             let expr = self.parse_expr()?;
             if !self.consume_token(TokenKind::CloseParen) {
-                return Err("expected close parenthesis");
+                return Err("expected close parenthesis".to_string());
             }
             let lhs = self.parse_stmt()?;
             if self.consume_token(TokenKind::Else) {
@@ -222,11 +246,11 @@ impl Parser {
         // while statement
         if self.consume_token(TokenKind::While) {
             if !self.consume_token(TokenKind::OpenParen) {
-                return Err("expected open parenthesis");
+                return Err("expected open parenthesis".to_string());
             }
             let expr = self.parse_expr()?;
             if !self.consume_token(TokenKind::CloseParen) {
-                return Err("expected close parenthesis");
+                return Err("expected close parenthesis".to_string());
             }
             let stmt = self.parse_stmt()?;
             return Ok(Box::new(Node {
@@ -238,7 +262,7 @@ impl Parser {
         // for statement
         if self.consume_token(TokenKind::For) {
             if !self.consume_token(TokenKind::OpenParen) {
-                return Err("expected open parenthesis");
+                return Err("expected open parenthesis".to_string());
             }
             let init = if self.peek_token(TokenKind::SemiCol) {
                 Box::new(Node::new_leaf(NodeKind::Nop))
@@ -246,7 +270,7 @@ impl Parser {
                 self.parse_expr()?
             };
             if !self.consume_token(TokenKind::SemiCol) {
-                return Err("expected semicolon");
+                return Err("expected semicolon".to_string());
             }
             let end = if self.peek_token(TokenKind::SemiCol) {
                 Box::new(Node::new_leaf(NodeKind::Nop))
@@ -254,7 +278,7 @@ impl Parser {
                 self.parse_expr()?
             };
             if !self.consume_token(TokenKind::SemiCol) {
-                return Err("expected semicolon");
+                return Err("expected semicolon".to_string());
             }
             let inc = if self.peek_token(TokenKind::SemiCol) {
                 Box::new(Node::new_leaf(NodeKind::Nop))
@@ -262,7 +286,7 @@ impl Parser {
                 self.parse_expr()?
             };
             if !self.consume_token(TokenKind::CloseParen) {
-                return Err("expected close parenthesis");
+                return Err("expected close parenthesis".to_string());
             }
             let stmt = self.parse_stmt()?;
             return Ok(Box::new(Node {
@@ -276,7 +300,7 @@ impl Parser {
         if self.consume_token(TokenKind::Return) {
             let expr = self.parse_expr()?;
             if !self.consume_token(TokenKind::SemiCol) {
-                return Err("expected semicolon");
+                return Err("expected semicolon".to_string());
             }
             return Ok(Box::new(Node {
                 kind: NodeKind::Return,
@@ -286,17 +310,17 @@ impl Parser {
         }
         let expr = self.parse_expr()?;
         if !self.consume_token(TokenKind::SemiCol) {
-            return Err("expected semicolon");
+            return Err("expected semicolon".to_string());
         }
         Ok(expr)
     }
 
-    pub fn parse_expr(&mut self) -> Result<Box<Node>, &'static str> {
+    pub fn parse_expr(&mut self) -> Result<Box<Node>, String> {
         let node = self.parse_assign()?;
         Ok(node)
     }
 
-    fn parse_assign(&mut self) -> Result<Box<Node>, &'static str> {
+    fn parse_assign(&mut self) -> Result<Box<Node>, String> {
         let mut node = self.parse_equality()?;
         loop {
             match &self.curr {
@@ -313,7 +337,7 @@ impl Parser {
         }
     }
 
-    fn parse_equality(&mut self) -> Result<Box<Node>, &'static str> {
+    fn parse_equality(&mut self) -> Result<Box<Node>, String> {
         let mut node = self.parse_relation()?;
         loop {
             match &self.curr {
@@ -335,7 +359,7 @@ impl Parser {
         }
     }
 
-    fn parse_relation(&mut self) -> Result<Box<Node>, &'static str> {
+    fn parse_relation(&mut self) -> Result<Box<Node>, String> {
         let mut node = self.parse_add()?;
         loop {
             match &self.curr {
@@ -367,7 +391,7 @@ impl Parser {
         }
     }
 
-    fn parse_add(&mut self) -> Result<Box<Node>, &'static str> {
+    fn parse_add(&mut self) -> Result<Box<Node>, String> {
         let mut node = self.parse_mul()?;
         loop {
             match &self.curr {
@@ -389,7 +413,7 @@ impl Parser {
         }
     }
 
-    fn parse_mul(&mut self) -> Result<Box<Node>, &'static str> {
+    fn parse_mul(&mut self) -> Result<Box<Node>, String> {
         let mut node = self.parse_unary()?;
         loop {
             match &self.curr {
@@ -411,9 +435,9 @@ impl Parser {
         }
     }
 
-    fn parse_unary(&mut self) -> Result<Box<Node>, &'static str> {
+    fn parse_unary(&mut self) -> Result<Box<Node>, String> {
         match &self.curr {
-            None => return Err("No new token"),
+            None => return Err("No new token".to_string()),
             Some(token) => match token.kind {
                 TokenKind::Add => {
                     self.consume();
@@ -431,7 +455,7 @@ impl Parser {
                     if let NodeKind::LVAL(_) = rhs.kind {
                         return Ok(Box::new(Node::new_unary(NodeKind::Deref, rhs)));
                     } else {
-                        return Err("expected lval");
+                        return Err("expected lval".to_string());
                     }
                 }
                 TokenKind::And => {
@@ -440,7 +464,7 @@ impl Parser {
                     if let NodeKind::LVAL(_) = rhs.kind {
                         return Ok(Box::new(Node::new_unary(NodeKind::Addr, rhs)));
                     } else {
-                        return Err("expected lval");
+                        return Err("expected lval".to_string());
                     }
                 }
                 _ => return self.parse_primary(),
@@ -448,14 +472,14 @@ impl Parser {
         }
     }
 
-    fn parse_primary(&mut self) -> Result<Box<Node>, &'static str> {
+    fn parse_primary(&mut self) -> Result<Box<Node>, String> {
         match &self.curr {
             Some(token) => match token.kind.to_owned() {
                 TokenKind::OpenParen => {
                     self.consume();
                     let node = self.parse_expr()?;
                     if !self.consume_token(TokenKind::CloseParen) {
-                        return Err("invalid parentheses");
+                        return Err("invalid parentheses".to_string());
                     } else {
                         Ok(node)
                     }
@@ -486,7 +510,10 @@ impl Parser {
 
                     if let Some(offset) = self.find_lval(&name) {
                         return Ok(Box::new(Node::new_leaf(NodeKind::LVAL(offset))));
+                    } else {
+                        return Err("variable not defined".to_string());
                     }
+                    /*
                     let cur_local = self.local.last_mut().unwrap();
                     if let None = cur_local.last() {
                         cur_local.push(LVal::new(name, 8));
@@ -494,11 +521,11 @@ impl Parser {
                     }
                     let offset = cur_local.last().unwrap().offset + 8;
                     cur_local.push(LVal::new(name, offset));
-                    Ok(Box::new(Node::new_leaf(NodeKind::LVAL(offset))))
+                    Ok(Box::new(Node::new_leaf(NodeKind::LVAL(offset))))*/
                 }
-                _ => Err("unexpected token"),
+                _ => Err("unexpected token".to_string()),
             },
-            None => Err("no new token"),
+            None => Err("no new token".to_string()),
         }
     }
 
@@ -540,7 +567,8 @@ impl Parser {
         self.local[id].len()
     }
 
-    fn push_local(&mut self, id: usize, name: String) -> u8 {
+    fn push_local(&mut self, name: String) -> u8 {
+        let id = self.local.len() - 1;
         if self.local[id].len() == 0 {
             self.local[id].push(LVal::new(name, 8));
             return 8;
@@ -680,7 +708,7 @@ fn two_relation_test() {
 
 #[test]
 fn stmt_test() {
-    let code = "{a = 42; b = 31;}".to_string();
+    let code = "{int a; a = 42;}".to_string();
     let mut parser = Parser::load(code);
     parser.consume();
     parser.new_stack();
@@ -689,12 +717,12 @@ fn stmt_test() {
         assert_eq!(stmts.len(), 2);
         let first = stmts[0].clone();
         let second = stmts[1].clone();
-        assert_eq!(first.kind, NodeKind::Assign);
+        assert_eq!(first.kind, NodeKind::Declar);
         assert_eq!(first.lhs.unwrap().kind, NodeKind::LVAL(8));
-        assert_eq!(first.rhs.unwrap().kind, NodeKind::NUM(42));
+        assert_eq!(first.rhs, None);
         assert_eq!(second.kind, NodeKind::Assign);
-        assert_eq!(second.lhs.unwrap().kind, NodeKind::LVAL(16));
-        assert_eq!(second.rhs.unwrap().kind, NodeKind::NUM(31));
+        assert_eq!(second.lhs.unwrap().kind, NodeKind::LVAL(8));
+        assert_eq!(second.rhs.unwrap().kind, NodeKind::NUM(42));
     } else {
         panic!("expect block statement");
     }
@@ -706,6 +734,8 @@ fn assign_test() {
     let mut parser = Parser::load(code);
     parser.consume();
     parser.new_stack();
+    parser.push_local("a".to_string());
+    parser.push_local("b".to_string());
     let node = parser.parse_stmt().unwrap();
     if let NodeKind::Block(stmts) = node.kind {
         assert_eq!(stmts.len(), 3);
@@ -775,6 +805,7 @@ fn for_test() {
     let mut parser = Parser::load(code);
     parser.consume();
     parser.new_stack();
+    parser.push_local("a".to_string());
     let stmt = parser.parse_stmt().unwrap();
     if let NodeKind::For { init, end, inc } = stmt.kind {
         assert_eq!(init.kind, NodeKind::Assign);
@@ -823,6 +854,7 @@ fn if_block_test() {
     let mut parser = Parser::load(code);
     parser.consume();
     parser.new_stack();
+    parser.push_local("a".to_string());
     let node = parser.parse_stmt().unwrap();
     if let NodeKind::If(_) = node.kind {
         let block = node.lhs.unwrap();
@@ -900,14 +932,14 @@ fn def_test() {
 
 #[test]
 fn ptr_test() {
-    let code = String::from("{a = 2; b = &a;}");
+    let code = String::from("{int a; a = 2; int b; b = &a;}");
     let mut parser = Parser::load(code);
     parser.init();
     let node = parser.parse_stmt().unwrap();
     if let NodeKind::Block(stmts) = node.kind {
-        let second = stmts[1].clone();
-        let rhs = second.rhs.unwrap();
-        assert_eq!(second.kind, NodeKind::Assign);
+        let forth = stmts[3].clone();
+        let rhs = forth.rhs.unwrap();
+        assert_eq!(forth.kind, NodeKind::Assign);
         assert_eq!(rhs.kind, NodeKind::Addr);
     } else {
         panic!("expected block")
@@ -916,16 +948,45 @@ fn ptr_test() {
 
 #[test]
 fn deref_test() {
-    let code = String::from("{a = 2; b = *a;}");
+    let code = String::from("{int a; a = 2; int b; b = *a;}");
     let mut parser = Parser::load(code);
     parser.init();
     let node = parser.parse_stmt().unwrap();
     if let NodeKind::Block(stmts) = node.kind {
-        let second = stmts[1].clone();
-        let rhs = second.rhs.unwrap();
-        assert_eq!(second.kind, NodeKind::Assign);
+        let forth = stmts[3].clone();
+        let rhs = forth.rhs.unwrap();
+        assert_eq!(forth.kind, NodeKind::Assign);
         assert_eq!(rhs.kind, NodeKind::Deref);
     } else {
         panic!("expected block")
     }
+}
+
+#[test]
+fn dec_test() {
+    let code = String::from("main(){int a; a = 2;}");
+    let mut parser = Parser::load(code);
+    let functions = parser.run().unwrap();
+    assert_eq!(functions.len(), 1);
+    let func = functions[0].clone();
+    if let NodeKind::Def {
+        name: _,
+        argv: _,
+        body: _d,
+        local,
+    } = func.kind
+    {
+        assert_eq!(parser.get_local_size(local), 1);
+        assert_eq!(parser.local[0][0].name, "a");
+    } else {
+        panic!("expected function def");
+    }
+}
+
+#[test]
+#[should_panic]
+fn not_find_var() {
+    let code = String::from("main(){int a; b = 2;}");
+    let mut parser = Parser::load(code);
+    let _ = parser.run().unwrap();
 }
