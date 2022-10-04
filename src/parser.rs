@@ -115,8 +115,12 @@ impl Parser {
             if let None = self.curr {
                 return Ok(code);
             }
-            let function = self.parse_def()?;
-            code.push(function);
+            if self.consume_token(TokenKind::Int)  {
+                let function = self.parse_def()?; 
+                code.push(function);
+            } else {
+                return Err(String::from("expected function."));
+            }     
         }
     }
 
@@ -900,7 +904,7 @@ fn func_mul_test() {
 
 #[test]
 fn def_test() {
-    let code = String::from("foo(a, b, c){return a + b + c;}");
+    let code = String::from("int foo(a, b, c){return a + b + c;}");
     let mut parser = Parser::load(code);
     let functions = parser.run().unwrap();
     assert_eq!(functions.len(), 1);
@@ -964,7 +968,7 @@ fn deref_test() {
 
 #[test]
 fn dec_test() {
-    let code = String::from("main(){int a; a = 2;}");
+    let code = String::from("int main(){int a; a = 2;}");
     let mut parser = Parser::load(code);
     let functions = parser.run().unwrap();
     assert_eq!(functions.len(), 1);
@@ -986,7 +990,7 @@ fn dec_test() {
 #[test]
 #[should_panic]
 fn not_find_var() {
-    let code = String::from("main(){int a; b = 2;}");
+    let code = String::from("int main(){int a; b = 2;}");
     let mut parser = Parser::load(code);
     let _ = parser.run().unwrap();
 }
