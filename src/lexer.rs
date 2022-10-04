@@ -22,11 +22,13 @@ pub(crate) enum TokenKind {
     CloseCur,   // }
     Comma,
     SemiCol,
+    And, // &
     Return,
     If,
     For,
     While,
     Else,
+    Int,
     Num(String),
     Ident(String),
 }
@@ -57,6 +59,7 @@ impl Token {
         let len = state.len();
         let word = state.into_iter().collect::<String>();
         match word.as_str() {
+            "int" => Some(Box::new(Self::new(TokenKind::Int, len))),
             "else" => Some(Box::new(Self::new(TokenKind::Else, len))),
             "if" => Some(Box::new(Self::new(TokenKind::If, len))),
             "while" => Some(Box::new(Self::new(TokenKind::While, len))),
@@ -76,6 +79,7 @@ impl Iterator for Lexer {
                 Some(&c) => match c {
                     '0'..='9' => return self.num(),
                     'a'..='z' | 'A'..='Z' => return self.word(),
+                    '&' => return self.bump(TokenKind::And, 1),
                     ',' => return self.bump(TokenKind::Comma, 1),
                     '{' => return self.bump(TokenKind::OpenCur, 1),
                     '}' => return self.bump(TokenKind::CloseCur, 1),

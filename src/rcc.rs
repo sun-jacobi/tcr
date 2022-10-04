@@ -30,6 +30,38 @@ impl Rcc {
     }
 
     fn gen(&mut self, node: Box<Node>) -> Result<(), &'static str> {
+        // *lval
+        if let NodeKind::Deref = node.kind {
+            if let Some(rhs) = &node.rhs {
+                if let NodeKind::LVAL(offset) = rhs.kind {
+                    Self::addr(offset);
+                    println!("  pop rax");
+                    println!("  mov rax, [rax]");
+                    println!("  mov rax, [rax]");
+                    println!("  push rax");
+                    return Ok(());
+                } else {
+                    return Err("expected lvalue.");
+                }
+            } else {
+                return Err("expected expression.");
+            }
+        }
+
+        // &lval
+        if let NodeKind::Addr = node.kind {
+            if let Some(rhs) = &node.rhs {
+                if let NodeKind::LVAL(offset) = rhs.kind {
+                    Self::addr(offset);
+                    return Ok(());
+                } else {
+                    return Err("expected lvalue.");
+                }
+            } else {
+                return Err("expected expression.");
+            }
+        }
+
         if let NodeKind::Def {
             name,
             argv,

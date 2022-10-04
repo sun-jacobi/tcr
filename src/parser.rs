@@ -28,6 +28,8 @@ pub(crate) enum NodeKind {
     SUB,
     MUL,
     DIV,
+    Deref, // *
+    Addr,  // &
     Block(Vec<Box<Node>>),
     If(Box<Node>),
     While,
@@ -423,6 +425,24 @@ impl Parser {
                     let rhs = self.parse_unary()?;
                     return Ok(Box::new(Node::new_unary(NodeKind::SUB, rhs)));
                 }
+                TokenKind::Star => {
+                    self.consume();
+                    let rhs = self.parse_primary()?;
+                    if let NodeKind::LVAL(_) = rhs.kind {
+                        return Ok(Box::new(Node::new_unary(NodeKind::Deref, rhs)));
+                    } else {
+                        return Err("expected lval");
+                    }
+                }
+                TokenKind::And => {
+                    self.consume();
+                    let rhs = self.parse_primary()?;
+                    if let NodeKind::LVAL(_) = rhs.kind {
+                        return Ok(Box::new(Node::new_unary(NodeKind::Addr, rhs)));
+                    } else {
+                        return Err("expected lval");
+                    }
+                }
                 _ => return self.parse_primary(),
             },
         }
@@ -539,6 +559,10 @@ impl Parser {
 impl Parser {
     fn new_stack(&mut self) {
         self.local.push(Vec::new());
+    }
+    fn init(&mut self) {
+        self.consume();
+        self.new_stack();
     }
 }
 
@@ -871,5 +895,37 @@ fn def_test() {
         }
     } else {
         panic!("expected function definition")
+    }
+}
+
+#[test]
+fn ptr_test() {
+    let code = String::from("{a = 2; b = &a;}");
+    let mut parser = Parser::load(code);
+    parser.init();
+    let node = parser.parse_stmt().unwrap();
+    if let NodeKind::Block(stmts) = node.kind {
+        let second = stmts[1].clone();
+        let rhs = second.rhs.unwrap();
+        assert_eq!(second.kind, NodeKind::Assign);
+        assert_eq!(rhs.kind, NodeKind::Addr);
+    } else {
+        panic!("expected block")
+    }
+}
+
+#[test]
+fn deref_test() {
+    let code = String::from("{a = 2; b = *a;}");
+    let mut parser = Parser::load(code);
+    parser.init();
+    let node = parser.parse_stmt().unwrap();
+    if let NodeKind::Block(stmts) = node.kind {
+        let second = stmts[1].clone();
+        let rhs = second.rhs.unwrap();
+        assert_eq!(second.kind, NodeKind::Assign);
+        assert_eq!(rhs.kind, NodeKind::Deref);
+    } else {
+        panic!("expected block")
     }
 }
