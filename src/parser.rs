@@ -8,7 +8,6 @@ pub(crate) struct Parser {
     local: Vec<Vec<LVal>>, // local frames for functions
 }
 
-#[allow(dead_code)]
 #[derive(Debug, PartialEq, Clone)]
 pub(crate) enum Type {
     INT,
@@ -18,13 +17,17 @@ pub(crate) enum Type {
 #[derive(Debug, PartialEq, Clone)]
 pub(crate) struct LVal {
     name: String,
-    //ty : Type,
+    val_type: Type,
     offset: u8,
 }
 
 impl LVal {
-    fn new(name: String, offset: u8) -> Self {
-        Self { name, offset }
+    fn new(name: String, val_type: Type, offset: u8) -> Self {
+        Self {
+            name,
+            val_type,
+            offset,
+        }
     }
 }
 
@@ -161,17 +164,28 @@ impl Parser {
         })))
     }
 
-    fn parse_arg(&mut self) -> Result<(), String> {
+    fn parse_arg(&mut self, val_type: Type) -> Result<(), String> {
         match &self.curr {
             None => return Err("expected argument".to_string()),
             Some(token) => match token.kind.to_owned() {
                 TokenKind::Ident(arg) => {
                     self.consume();
-                    self.push_local(arg.clone());
+                    self.push_local(val_type, arg.clone());
                     Ok(())
                 }
                 _ => return Err("expected argument".to_string()),
             },
+        }
+    }
+
+    fn parse_ptr(&mut self, init_type: Type) -> Type {
+        let mut val_type = init_type;
+        loop {
+            if self.consume_token(TokenKind::Star) {
+                val_type = Type::PTR(Box::new(val_type));
+            } else {
+                return val_type;
+            }
         }
     }
 
@@ -189,8 +203,9 @@ impl Parser {
                 Some(token) => match token.kind.to_owned() {
                     TokenKind::Int => {
                         self.consume();
+                        let val_type = self.parse_ptr(Type::INT);
                         args += 1;
-                        self.parse_arg()?;
+                        self.parse_arg(val_type)?;
                         if self.consume_token(TokenKind::CloseParen) {
                             return Ok(args);
                         }
@@ -204,28 +219,33 @@ impl Parser {
         }
     }
 
-    fn parse_stmt(&mut self) -> Result<Box<Node>, String> {
-        // def new lval
-        if self.consume_token(TokenKind::Int) {
-            match &self.curr {
-                None => return Err("expected variable name".to_string()),
-                Some(token) => match token.kind.to_owned() {
-                    TokenKind::Ident(name) => {
-                        self.consume();
-                        let offset = self.push_local(name.clone());
-                        if self.consume_token(TokenKind::SemiCol) {
-                            return Ok(Box::new(Node {
-                                kind: NodeKind::Declar,
-                                lhs: Some(Box::new(Node::new_leaf(NodeKind::LVAL(offset)))),
-                                rhs: None,
-                            }));
-                        } else {
-                            return Err("TODO".to_string());
-                        }
+    fn parse_var(&mut self, val_type: Type) -> Result<Box<Node>, String> {
+        match &self.curr {
+            None => return Err("expected variable name".to_string()),
+            Some(token) => match token.kind.to_owned() {
+                TokenKind::Ident(name) => {
+                    self.consume();
+                    let offset = self.push_local(val_type, name.clone());
+                    if self.consume_token(TokenKind::SemiCol) {
+                        return Ok(Box::new(Node {
+                            kind: NodeKind::Declar,
+                            lhs: Some(Box::new(Node::new_leaf(NodeKind::LVAL(offset)))),
+                            rhs: None,
+                        }));
+                    } else {
+                        return Err("TODO".to_string());
                     }
-                    _ => return Err("expected variable name".to_string()),
-                },
-            }
+                }
+                _ => return Err("expected variable name".to_string()),
+            },
+        }
+    }
+
+    fn parse_stmt(&mut self) -> Result<Box<Node>, String> {
+        // declare new lval
+        if self.consume_token(TokenKind::Int) {
+            let val_type = self.parse_ptr(Type::INT);
+            return self.parse_var(val_type);
         }
 
         // nop
@@ -584,14 +604,14 @@ impl Parser {
         self.local[id].len()
     }
 
-    fn push_local(&mut self, name: String) -> u8 {
+    fn push_local(&mut self, val_type: Type, name: String) -> u8 {
         let id = self.local.len() - 1;
         if self.local[id].len() == 0 {
-            self.local[id].push(LVal::new(name, 8));
+            self.local[id].push(LVal::new(name, val_type, 8));
             return 8;
         } else {
             let offset = self.local[id].last().unwrap().offset + 8;
-            self.local[id].push(LVal::new(name, offset));
+            self.local[id].push(LVal::new(name, val_type, offset));
             return offset;
         }
     }
@@ -751,8 +771,8 @@ fn assign_test() {
     let mut parser = Parser::load(code);
     parser.consume();
     parser.new_stack();
-    parser.push_local("a".to_string());
-    parser.push_local("b".to_string());
+    parser.push_local(Type::INT, "a".to_string());
+    parser.push_local(Type::INT, "b".to_string());
     let node = parser.parse_stmt().unwrap();
     if let NodeKind::Block(stmts) = node.kind {
         assert_eq!(stmts.len(), 3);
@@ -822,7 +842,7 @@ fn for_test() {
     let mut parser = Parser::load(code);
     parser.consume();
     parser.new_stack();
-    parser.push_local("a".to_string());
+    parser.push_local(Type::INT, "a".to_string());
     let stmt = parser.parse_stmt().unwrap();
     if let NodeKind::For { init, end, inc } = stmt.kind {
         assert_eq!(init.kind, NodeKind::Assign);
@@ -871,7 +891,7 @@ fn if_block_test() {
     let mut parser = Parser::load(code);
     parser.consume();
     parser.new_stack();
-    parser.push_local("a".to_string());
+    parser.push_local(Type::INT, "a".to_string());
     let node = parser.parse_stmt().unwrap();
     if let NodeKind::If(_) = node.kind {
         let block = node.lhs.unwrap();
@@ -1006,4 +1026,26 @@ fn not_find_var() {
     let code = String::from("int main(){int a; b = 2;}");
     let mut parser = Parser::load(code);
     let _ = parser.run().unwrap();
+}
+
+#[test]
+fn pptr_test() {
+    let code = String::from("{int **a;}");
+    let mut parser = Parser::load(code);
+    parser.init();
+    let _ = parser.parse_stmt().unwrap();
+    let pptr = parser.local[0][0].clone();
+    if let Type::PTR(ptr) = pptr.val_type {
+        let ptr_type = *ptr;
+        if let Type::PTR(val) = ptr_type {
+            assert_eq!(*val, Type::INT);
+        } else {
+            panic!("expected pointer ");
+        } 
+    } else {
+        panic!("expected pointer to pointer");
+    }
+
+    
+        
 }
