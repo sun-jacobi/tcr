@@ -78,14 +78,14 @@ impl Rcc {
 
         if let NodeKind::Def {
             name,
-            argv,
+            args,
             body,
             local,
         } = node.kind
         {
             println!("_{}:", name);
             let offsets = self.parser.get_local_size(local);
-            self.prolog(offsets, argv.len());
+            self.prolog(offsets, args);
             if let NodeKind::Block(stmts) = body.kind {
                 for stmt in stmts {
                     self.gen(stmt)?;

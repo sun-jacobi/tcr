@@ -8,9 +8,17 @@ pub(crate) struct Parser {
     local: Vec<Vec<LVal>>, // local frames for functions
 }
 
+#[allow(dead_code)]
+#[derive(Debug, PartialEq, Clone)]
+pub(crate) enum Type {
+    INT,
+    PTR(Box<Type>),
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub(crate) struct LVal {
     name: String,
+    //ty : Type,
     offset: u8,
 }
 
@@ -51,7 +59,7 @@ pub(crate) enum NodeKind {
     }, // function call
     Def {
         name: String,
-        argv: Vec<LVal>,
+        args: usize,
         body: Box<Node>,
         local: usize, // index in the local frames
     }, // function definition
@@ -115,71 +123,71 @@ impl Parser {
             if let None = self.curr {
                 return Ok(code);
             }
-            if self.consume_token(TokenKind::Int)  {
-                let function = self.parse_def()?; 
+            if self.consume_token(TokenKind::Int) {
+                let function = self.parse_def()?;
                 code.push(function);
             } else {
                 return Err(String::from("expected function."));
-            }     
+            }
         }
     }
 
-    pub fn parse_def(&mut self) -> Result<Box<Node>, String> {
+    fn parse_def(&mut self) -> Result<Box<Node>, String> {
         match &self.curr {
             None => return Err("no new token".to_string()),
             Some(token) => match token.kind.to_owned() {
                 TokenKind::Ident(name) => {
                     self.consume();
-                    if !self.consume_token(TokenKind::OpenParen) {
-                        return Err("expected open parenthesis.".to_string());
-                    }
-                    let mut argv = Vec::new();
-                    let local = self.local.len();
-                    self.local.push(Vec::new());
-                    if self.consume_token(TokenKind::CloseParen) {
-                        if !self.peek_token(TokenKind::OpenCur) {
-                            return Err("expected function body.".to_string());
-                        }
-                        let body = self.parse_stmt()?;
-                        return Ok(Box::new(Node::new_leaf(NodeKind::Def {
-                            name,
-                            argv,
-                            body,
-                            local,
-                        })));
-                    }
-                    loop {
-                        match &self.curr {
-                            None => return Err("no new token".to_string()),
-                            Some(token) => match token.kind.to_owned() {
-                                TokenKind::Ident(arg) => {
-                                    self.consume();
-                                    let offset = self.push_local(arg.clone());
-                                    argv.push(LVal::new(arg, offset));
-                                    if self.consume_token(TokenKind::CloseParen) {
-                                        if !self.peek_token(TokenKind::OpenCur) {
-                                            return Err("expected function body.".to_string());
-                                        }
-                                        let body = self.parse_stmt()?;
-                                        return Ok(Box::new(Node::new_leaf(NodeKind::Def {
-                                            name,
-                                            argv,
-                                            body,
-                                            local,
-                                        })));
-                                    }
-                                    if self.consume_token(TokenKind::Comma) {
-                                        continue;
-                                    }
-                                }
-                                _ => return Err("unexpected token".to_string()),
-                            },
-                        }
-                    }
+                    self.parse_func(name)
                 }
                 _ => return Err("expected function name".to_string()),
             },
         }
+    }
+
+    fn parse_args(&mut self) -> Result<usize, String> {
+        if !self.consume_token(TokenKind::OpenParen) {
+            return Err("expected open parenthesis.".to_string());
+        }
+        let mut args = 0;
+        if self.consume_token(TokenKind::CloseParen) {
+            return Ok(args);
+        }
+        loop {
+            match &self.curr {
+                None => return Err("no new token".to_string()),
+                Some(token) => match token.kind.to_owned() {
+                    TokenKind::Ident(arg) => {
+                        self.consume();
+                        self.push_local(arg.clone());
+                        args += 1;
+                        if self.consume_token(TokenKind::CloseParen) {
+                            return Ok(args);
+                        }
+                        if self.consume_token(TokenKind::Comma) {
+                            continue;
+                        }
+                    }
+                    _ => return Err("unexpected token".to_string()),
+                },
+            }
+        }
+    }
+
+    fn parse_func(&mut self, name: String) -> Result<Box<Node>, String> {
+        let local = self.local.len();
+        self.local.push(Vec::new());
+        let args = self.parse_args()?;
+        if !self.peek_token(TokenKind::OpenCur) {
+            return Err("expected function body.".to_string());
+        }
+        let body = self.parse_stmt()?;
+        Ok(Box::new(Node::new_leaf(NodeKind::Def {
+            name,
+            args,
+            body,
+            local,
+        })))
     }
 
     pub fn parse_stmt(&mut self) -> Result<Box<Node>, String> {
@@ -517,15 +525,6 @@ impl Parser {
                     } else {
                         return Err("variable not defined".to_string());
                     }
-                    /*
-                    let cur_local = self.local.last_mut().unwrap();
-                    if let None = cur_local.last() {
-                        cur_local.push(LVal::new(name, 8));
-                        return Ok(Box::new(Node::new_leaf(NodeKind::LVAL(8))));
-                    }
-                    let offset = cur_local.last().unwrap().offset + 8;
-                    cur_local.push(LVal::new(name, offset));
-                    Ok(Box::new(Node::new_leaf(NodeKind::LVAL(offset))))*/
                 }
                 _ => Err("unexpected token".to_string()),
             },
@@ -911,17 +910,17 @@ fn def_test() {
     let foo = functions[0].clone();
     if let NodeKind::Def {
         name,
-        argv,
+        args,
         body,
         local,
     } = foo.kind
     {
         assert_eq!(name, "foo");
         assert_eq!(3, parser.local[0].len());
-        assert_eq!(argv.len(), 3);
+        assert_eq!(args, 3);
         assert_eq!(local, 0);
-        assert_eq!(argv[0].name, "a");
-        assert_eq!(argv[1].name, "b");
+        //assert_eq!(argv[0].name, "a");
+        //assert_eq!(argv[1].name, "b");
         if let NodeKind::Block(stmts) = body.kind {
             assert_eq!(stmts.len(), 1);
             let stmt = stmts[0].clone();
@@ -975,7 +974,7 @@ fn dec_test() {
     let func = functions[0].clone();
     if let NodeKind::Def {
         name: _,
-        argv: _,
+        args: _,
         body: _d,
         local,
     } = func.kind
