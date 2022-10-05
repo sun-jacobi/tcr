@@ -145,35 +145,6 @@ impl Parser {
         }
     }
 
-    fn parse_args(&mut self) -> Result<usize, String> {
-        if !self.consume_token(TokenKind::OpenParen) {
-            return Err("expected open parenthesis.".to_string());
-        }
-        let mut args = 0;
-        if self.consume_token(TokenKind::CloseParen) {
-            return Ok(args);
-        }
-        loop {
-            match &self.curr {
-                None => return Err("no new token".to_string()),
-                Some(token) => match token.kind.to_owned() {
-                    TokenKind::Ident(arg) => {
-                        self.consume();
-                        self.push_local(arg.clone());
-                        args += 1;
-                        if self.consume_token(TokenKind::CloseParen) {
-                            return Ok(args);
-                        }
-                        if self.consume_token(TokenKind::Comma) {
-                            continue;
-                        }
-                    }
-                    _ => return Err("unexpected token".to_string()),
-                },
-            }
-        }
-    }
-
     fn parse_func(&mut self, name: String) -> Result<Box<Node>, String> {
         let local = self.local.len();
         self.local.push(Vec::new());
@@ -190,7 +161,50 @@ impl Parser {
         })))
     }
 
-    pub fn parse_stmt(&mut self) -> Result<Box<Node>, String> {
+    fn parse_arg(&mut self) -> Result<(), String> {
+        match &self.curr {
+            None => return Err("expected argument".to_string()),
+            Some(token) => match token.kind.to_owned() {
+                TokenKind::Ident(arg) => {
+                    self.consume();
+                    self.push_local(arg.clone());
+                    Ok(())
+                }
+                _ => return Err("expected argument".to_string()),
+            },
+        }
+    }
+
+    fn parse_args(&mut self) -> Result<usize, String> {
+        if !self.consume_token(TokenKind::OpenParen) {
+            return Err("expected open parenthesis.".to_string());
+        }
+        let mut args = 0;
+        if self.consume_token(TokenKind::CloseParen) {
+            return Ok(args);
+        }
+        loop {
+            match &self.curr {
+                None => return Err("no new token".to_string()),
+                Some(token) => match token.kind.to_owned() {
+                    TokenKind::Int => {
+                        self.consume();
+                        args += 1;
+                        self.parse_arg()?;
+                        if self.consume_token(TokenKind::CloseParen) {
+                            return Ok(args);
+                        }
+                        if self.consume_token(TokenKind::Comma) {
+                            continue;
+                        }
+                    }
+                    _ => return Err("unexpected token".to_string()),
+                },
+            }
+        }
+    }
+
+    fn parse_stmt(&mut self) -> Result<Box<Node>, String> {
         // def new lval
         if self.consume_token(TokenKind::Int) {
             match &self.curr {
@@ -327,7 +341,7 @@ impl Parser {
         Ok(expr)
     }
 
-    pub fn parse_expr(&mut self) -> Result<Box<Node>, String> {
+    fn parse_expr(&mut self) -> Result<Box<Node>, String> {
         let node = self.parse_assign()?;
         Ok(node)
     }
@@ -903,7 +917,7 @@ fn func_mul_test() {
 
 #[test]
 fn def_test() {
-    let code = String::from("int foo(a, b, c){return a + b + c;}");
+    let code = String::from("int foo(int a, int b, int c){return a + b + c;}");
     let mut parser = Parser::load(code);
     let functions = parser.run().unwrap();
     assert_eq!(functions.len(), 1);

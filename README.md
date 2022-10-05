@@ -8,7 +8,7 @@
 
 ### Example
 ```
-int foo(a) 
+int foo(int a) 
 {
   if (a == 1) 
     return 1; 
