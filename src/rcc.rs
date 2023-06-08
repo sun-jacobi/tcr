@@ -7,7 +7,7 @@ pub struct Rcc {
 }
 
 // C ABI register
-const ARG_REGISTER: [&'static str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
+const ARG_REGISTER: [&str; 6] = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"];
 
 impl Rcc {
     pub fn init(src: String) -> Self {
@@ -204,6 +204,7 @@ impl Rcc {
                 None => return Err("expected lvalue".to_string()),
                 Some(lhs) => match lhs.kind {
                     NodeKind::LVAL(offset) => {
+                        
                         Self::addr(offset);
                         self.gen(node.rhs.unwrap())?;
                         println!("  pop r10");

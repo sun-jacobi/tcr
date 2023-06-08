@@ -150,7 +150,7 @@ impl Lexer {
             match self.first() {
                 None => return Token::word(state),
                 Some(&c) => match c {
-                    'a'..='z' | 'A'..='Z' => {
+                    'a'..='z' | 'A'..='Z'| '0'..='9' => {
                         state.push(c);
                         self.cursor += 1;
                     }
@@ -254,11 +254,11 @@ fn relational_test() {
 
 #[test]
 fn assign_test() {
-    let code = String::from("a=0");
+    let code = String::from("if2=0");
     let mut lexer = Lexer::new(code);
     assert_eq!(
         lexer.next().unwrap().kind,
-        TokenKind::Ident("a".to_string())
+        TokenKind::Ident("if2".to_string())
     );
     assert_eq!(lexer.next().unwrap().kind, TokenKind::Eq);
     assert_eq!(lexer.next().unwrap().kind, TokenKind::Num("0".to_string()));

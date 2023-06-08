@@ -575,6 +575,7 @@ impl Parser {
         Some(lval.offset)
     }
 
+
     fn peek_token(&mut self, expected: TokenKind) -> bool {
         match &self.curr {
             None => false,
